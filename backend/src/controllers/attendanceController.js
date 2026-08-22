@@ -63,7 +63,7 @@ async function checkOut(req, res) {
       WHERE id = $3
     `, [nowTime, hours, record.id]);
 
-    await queryAsync(`UPDATE users SET status = 'ABSENT' WHERE id = $1`, [userId]);
+    await queryAsync(`UPDATE users SET status = 'PRESENT' WHERE id = $1`, [userId]);
 
     const updatedRecord = await getAsync(`SELECT * FROM attendance WHERE id = $1`, [record.id]);
 
