@@ -264,17 +264,31 @@ async function initDB() {
       // Seed Payroll
       await queryAsync(`
         INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
-        VALUES (2, 50000, 25000, 12500, 3332.50, 2082.50, 2082.50, 4970, 3000, 200, 46800)
+        VALUES (2, 75000, 37500, 18750, 4998.75, 3123.75, 3123.75, 7503.75, 4500, 200, 70300)
       `);
       await queryAsync(`
         INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
         VALUES (3, 60000, 30000, 15000, 3999, 2499, 2499, 6003, 3600, 200, 56200)
       `);
 
-      // Seed sample leave
+      // Seed attendance logs for John Doe (User 2)
+      await queryAsync(`
+        INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
+        VALUES 
+          (2, '2026-08-18', '09:05:00', '17:35:00', 8.50, 'PRESENT'),
+          (2, '2026-08-19', '09:00:00', '17:30:00', 8.50, 'PRESENT'),
+          (2, '2026-08-20', '09:12:00', '17:45:00', 8.55, 'PRESENT'),
+          (2, '2026-08-21', '09:00:00', '17:30:00', 8.50, 'PRESENT')
+      `);
+
+      // Seed leave history for John Doe (User 2)
       await queryAsync(`
         INSERT INTO leaves (user_id, leave_type, start_date, end_date, total_days, reason, status)
-        VALUES (3, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
+        VALUES 
+          (2, 'PAID', '2026-07-10', '2026-07-12', 3, 'Summer vacation with family', 'APPROVED'),
+          (2, 'SICK', '2026-08-04', '2026-08-05', 2, 'Dental checkup and recovery', 'APPROVED'),
+          (2, 'PAID', '2026-09-01', '2026-09-03', 3, 'Attending developer conference', 'PENDING'),
+          (3, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
       `);
 
       console.log('✅ Database Initialized & Seeded Successfully!');

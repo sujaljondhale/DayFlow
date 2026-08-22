@@ -8,14 +8,22 @@ async function getDashboardStats(req, res) {
     const totalEmpRow = await getAsync(`SELECT COUNT(*) as count FROM users`);
     const totalEmployees = parseInt(totalEmpRow?.count || totalEmpRow?.['COUNT(*)'] || 0, 10);
 
-    const presentRow = await getAsync(`SELECT COUNT(*) as count FROM users WHERE status = 'PRESENT'`);
-    const presentToday = parseInt(presentRow?.count || presentRow?.['COUNT(*)'] || 0, 10);
+    const presentAttRow = await getAsync(`
+      SELECT COUNT(DISTINCT user_id) as count 
+      FROM attendance 
+      WHERE date = $1 AND check_in IS NOT NULL
+    `, [today]);
+    const presentAttCount = parseInt(presentAttRow?.count || presentAttRow?.['COUNT(*)'] || 0, 10);
+
+    const presentStatusRow = await getAsync(`SELECT COUNT(*) as count FROM users WHERE status = 'PRESENT'`);
+    const presentStatusCount = parseInt(presentStatusRow?.count || presentStatusRow?.['COUNT(*)'] || 0, 10);
+    
+    const presentToday = Math.max(presentAttCount, presentStatusCount);
 
     const onLeaveRow = await getAsync(`SELECT COUNT(*) as count FROM users WHERE status = 'ON_LEAVE'`);
     const onLeave = parseInt(onLeaveRow?.count || onLeaveRow?.['COUNT(*)'] || 0, 10);
 
-    const absentRow = await getAsync(`SELECT COUNT(*) as count FROM users WHERE status = 'ABSENT'`);
-    const absentToday = parseInt(absentRow?.count || absentRow?.['COUNT(*)'] || 0, 10);
+    const absentToday = Math.max(0, totalEmployees - presentToday - onLeave);
 
     const pendingLeaveRow = await getAsync(`SELECT COUNT(*) as count FROM leaves WHERE status = 'PENDING'`);
     const pendingLeaves = parseInt(pendingLeaveRow?.count || pendingLeaveRow?.['COUNT(*)'] || 0, 10);
