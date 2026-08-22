@@ -1,0 +1,57 @@
+export type User = { id: number; name: string; email: string; role: string; employeeId: string; companyName: string; department?: string; jobPosition?: string; };
+export type Employee = User & { status?: string; joinDate?: string; };
+export type DashboardStats = { totalEmployees: number; presentToday: number; onLeaveToday: number; newHires: number; };
+export type Attendance = { id: number; date: string; checkIn: string; checkOut?: string; status: string; };
+export type Leave = { id: number; startDate: string; endDate: string; type: string; status: string; reason: string; };
+export type Payroll = { id: number; month: string; year: number; basicSalary: number; netSalary: number; status: string; };
+
+export const getGetAttendanceLogsQueryKey = () => ['attendance'];
+export const getGetAttendanceTodayQueryKey = () => ['attendanceToday'];
+export const getGetDashboardStatsQueryKey = () => ['dashboardStats'];
+export const getGetEmployeeQueryKey = (id: number) => ['employee', id];
+export const getGetEmployeesQueryKey = () => ['employees'];
+export const getGetLeaveBalanceQueryKey = () => ['leaveBalance'];
+export const getGetLeavesQueryKey = () => ['leaves'];
+export const getGetMeQueryKey = () => ['me'];
+export const getGetMyPayrollQueryKey = () => ['payroll'];
+
+export const useApplyLeave = () => ({ mutateAsync: async () => ({}) });
+export const useCheckIn = () => ({ mutateAsync: async () => ({}) });
+export const useCheckOut = () => ({ mutateAsync: async () => ({}) });
+export const useGetAttendanceLogs = () => ({ data: [] as Attendance[], isLoading: false });
+export const useGetAttendanceToday = () => ({ data: null, isLoading: false });
+export const useGetDashboardStats = () => ({ data: { totalEmployees: 10, presentToday: 8, onLeaveToday: 2, newHires: 1 } as DashboardStats, isLoading: false });
+export const useGetEmployee = () => ({ data: null, isLoading: false });
+export const useGetEmployees = () => ({ data: [] as Employee[], isLoading: false });
+export const useGetLeaveBalance = () => ({ data: { annual: 20, sick: 10 }, isLoading: false });
+export const useGetLeaves = () => ({ data: [] as Leave[], isLoading: false });
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { authApi, type LoginPayload, type SignupPayload } from './auth.api';
+
+export const useGetMe = () => {
+  return useQuery({
+    queryKey: getGetMeQueryKey(),
+    queryFn: () => authApi.me(),
+    retry: false, // Don't retry on 401
+    staleTime: Infinity, // Keep session alive
+  });
+};
+
+export const useGetMyPayroll = () => ({ data: [] as Payroll[], isLoading: false });
+export const useHealthCheck = () => ({ data: { status: 'ok' }, isLoading: false });
+
+export const useLogin = () => {
+  return useMutation({
+    mutationFn: (data: LoginPayload) => authApi.login(data),
+  });
+};
+
+export const useSignup = () => {
+  return useMutation({
+    mutationFn: (data: SignupPayload) => authApi.signup(data),
+  });
+};
+
+export const useUpdateEmployee = () => ({ mutateAsync: async () => ({}) });
+export const useUpdateLeaveStatus = () => ({ mutateAsync: async () => ({}) });
+export const useUpdatePayroll = () => ({ mutateAsync: async () => ({}) });
