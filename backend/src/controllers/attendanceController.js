@@ -6,7 +6,7 @@ async function checkIn(req, res) {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
 
-    let record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date = $2`, [userId, today]);
+    let record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date::text = $2`, [userId, today]);
 
     if (record && record.check_in && record.check_out) {
       return res.status(400).json({ success: false, error: 'Attendance already completed for today', record });
@@ -25,7 +25,7 @@ async function checkIn(req, res) {
 
     await queryAsync(`UPDATE users SET status = 'PRESENT' WHERE id = $1`, [userId]);
 
-    record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date = $2`, [userId, today]);
+    record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date::text = $2`, [userId, today]);
 
     return res.json({
       success: true,
@@ -44,7 +44,7 @@ async function checkOut(req, res) {
     const today = new Date().toISOString().split('T')[0];
     const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
 
-    const record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date = $2`, [userId, today]);
+    const record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date::text = $2`, [userId, today]);
 
     if (!record || !record.check_in) {
       return res.status(400).json({ success: false, error: 'Cannot check out before checking in' });
@@ -53,7 +53,7 @@ async function checkOut(req, res) {
     const checkInDate = new Date(`${today}T${record.check_in}`);
     const checkOutDate = new Date(`${today}T${nowTime}`);
     const diffMs = checkOutDate - checkInDate;
-    const hours = Math.max(0, parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)));
+    const hours = Math.max(0.1, parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)));
 
     await queryAsync(`
       UPDATE attendance
@@ -81,7 +81,7 @@ async function getTodayAttendance(req, res) {
     const userId = req.user.userId;
     const today = new Date().toISOString().split('T')[0];
 
-    const record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date = $2`, [userId, today]);
+    const record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date::text = $2`, [userId, today]);
 
     let isCheckedIn = false;
     if (record && record.check_in && !record.check_out) {
@@ -124,12 +124,12 @@ async function getAttendanceLogs(req, res) {
 
     if (startDate) {
       params.push(startDate);
-      sql += ` AND a.date >= $${params.length}`;
+      sql += ` AND a.date::text >= $${params.length}`;
     }
 
     if (endDate) {
       params.push(endDate);
-      sql += ` AND a.date <= $${params.length}`;
+      sql += ` AND a.date::text <= $${params.length}`;
     }
 
     sql += ` ORDER BY a.date DESC, a.id DESC`;

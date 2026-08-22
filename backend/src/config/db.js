@@ -13,7 +13,8 @@ const dbPath = path.join(__dirname, '../../dayflow.sqlite');
 function convertSqlForSqlite(sql) {
   let converted = sql
     .replace(/SERIAL PRIMARY KEY/gi, 'INTEGER PRIMARY KEY AUTOINCREMENT')
-    .replace(/NUMERIC\(\d+,\d+\)/gi, 'REAL');
+    .replace(/NUMERIC\(\d+,\d+\)/gi, 'REAL')
+    .replace(/::text|::date/gi, '');
 
   // Replace $1, $2, $3... with ?
   converted = converted.replace(/\$\d+/g, '?');
