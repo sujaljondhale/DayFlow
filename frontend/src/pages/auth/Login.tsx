@@ -6,7 +6,7 @@ import { Link, useLocation } from 'wouter';
 import { Eye, EyeOff } from 'lucide-react';
 import { useLogin } from '@/api';
 import { useAuth } from '@/context/AuthContext';
-import { Button } from '@/components/ui/button';
+import { AuthLayout } from '@/layouts/AuthLayout';
 import { useToast } from '@/hooks/use-toast';
 
 const loginSchema = z.object({
@@ -33,7 +33,6 @@ export default function Login() {
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
-      // Determine if identifier is an email or employee ID
       const isEmail = data.identifier.includes('@');
       const payload = isEmail 
         ? { email: data.identifier, password: data.password }
@@ -56,45 +55,50 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-layout">
-      <div className="auth-container glass">
-        <div className="brand-mark mb-6">D</div>
-        <h1 className="text-2xl font-semibold mb-2">Log in to Dayflow</h1>
-        <p className="text-muted-foreground mb-6">Enter your email or employee ID to continue.</p>
-
-        <form className="auth-form" onSubmit={form.handleSubmit(onSubmit)}>
-          <div className="auth-field-wrap mb-4">
-            <input 
-              type="text" 
-              placeholder="Email or Employee ID" 
-              className={`w-full p-3 rounded border ${form.formState.errors.identifier ? 'border-red-500' : 'border-border'} bg-background`}
-              {...form.register('identifier')} 
-            />
-            {form.formState.errors.identifier && <span className="text-red-500 text-sm mt-1">{form.formState.errors.identifier.message}</span>}
-          </div>
-
-          <div className="auth-field-wrap mb-6 relative">
-            <input 
-              type={showPassword ? 'text' : 'password'} 
-              placeholder="Password" 
-              className={`w-full p-3 rounded border ${form.formState.errors.password ? 'border-red-500' : 'border-border'} bg-background pr-10`}
-              {...form.register('password')} 
-            />
-            <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowPassword(!showPassword)}>
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-            {form.formState.errors.password && <span className="text-red-500 text-sm mt-1">{form.formState.errors.password.message}</span>}
-          </div>
-
-          <Button type="submit" className="w-full mb-4 py-6" disabled={loginMutation.isPending}>
-            {loginMutation.isPending ? 'Logging in...' : 'Log in'}
-          </Button>
-        </form>
-
-        <div className="auth-switch text-center text-sm text-muted-foreground">
-          Don't have an account? <Link href="/signup" className="text-primary hover:underline">Sign up</Link>
+    <AuthLayout>
+      <h1>Sign in</h1>
+      <div className="auth-switch">Don't have an account? <Link href="/signup">Sign up</Link></div>
+      
+      <form className="auth-form" onSubmit={form.handleSubmit(onSubmit)}>
+        <div className="auth-field-wrap">
+          <input 
+            type="text" 
+            placeholder="Email or employee ID" 
+            {...form.register('identifier')} 
+          />
+          {form.formState.errors.identifier && <p className="form-error">{form.formState.errors.identifier.message}</p>}
         </div>
+        
+        <div className="auth-field-wrap">
+          <input 
+            type={showPassword ? 'text' : 'password'} 
+            placeholder="Enter your password" 
+            {...form.register('password')} 
+          />
+          <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, outline: 'none' }}>
+             {showPassword ? <EyeOff className="password-icon" size={16} /> : <Eye className="password-icon" size={16} />}
+          </button>
+          {form.formState.errors.password && <p className="form-error">{form.formState.errors.password.message}</p>}
+        </div>
+        
+        <label className="auth-check-label">
+          <input type="checkbox" /> Keep me signed in
+        </label>
+        
+        <button type="submit" className="full-btn" disabled={loginMutation.isPending}>
+          {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
+      
+      <div className="auth-divider">Or sign in with</div>
+      <div className="social-logins">
+        <button type="button" className="social-btn">
+          <img src="https://www.svgrepo.com/show/475656/google-color.svg" width={16} alt="Google" /> Google
+        </button>
+        <button type="button" className="social-btn">
+          <img src="https://www.svgrepo.com/show/511330/apple-173.svg" width={16} alt="Apple" style={{filter: 'invert(1)'}} /> Apple
+        </button>
       </div>
-    </div>
+    </AuthLayout>
   );
 }
