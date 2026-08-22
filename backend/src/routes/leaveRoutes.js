@@ -1,6 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { applyLeave, getLeaves, updateLeaveStatus, getLeaveBalance } = require('../controllers/leaveController');
+const { 
+  applyLeave, 
+  getLeaves, 
+  updateLeaveStatus, 
+  getLeaveBalance, 
+  getLeaveAllocations, 
+  setLeaveAllocation 
+} = require('../controllers/leaveController');
 
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 router.use(requireAuth);
