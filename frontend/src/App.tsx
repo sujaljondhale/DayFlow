@@ -210,9 +210,10 @@ function Shell({ children }: { children: ReactNode }) {
 
 function Dashboard() {
   const [, setLocation] = useLocation();
+  const [daysLimit, setDaysLimit] = useState<number>(7);
   const meQuery = useGetMe();
   const user = meQuery.data?.user;
-  const stats = useGetDashboardStats();
+  const stats = useGetDashboardStats(daysLimit);
   const today = useGetAttendanceToday();
   const leaves = useGetLeaves();
   const qc = useQueryClient();
@@ -223,11 +224,31 @@ function Dashboard() {
   const trend = data?.attendanceTrend || [];
   const maxTrend = Math.max(...trend.map((d) => Math.max(d.present, d.absent)), 1);
   const pending = (leaves.data || []).filter((leave) => leave.status?.toLowerCase() === 'pending').slice(0, 4);
+
+  const isCompletedToday = !!(todayData?.checkIn && todayData?.checkOut);
+  const isCheckedIn = !!(todayData?.checkIn && !todayData?.checkOut);
+
   const doAttendance = () => {
-    const action = todayData?.checkIn && !todayData.checkOut ? checkOut : checkIn;
-    action.mutate(undefined, { onSuccess: () => { qc.invalidateQueries({ queryKey: getGetAttendanceTodayQueryKey() }); qc.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() }); } });
+    if (isCompletedToday) return;
+    const action = isCheckedIn ? checkOut : checkIn;
+    action.mutate(undefined, {
+      onSuccess: async () => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetAttendanceTodayQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetAttendanceLogsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetMeQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetEmployeesQueryKey() }),
+        ]);
+        await stats.refetch();
+        await today.refetch();
+      },
+    });
   };
-  return <Shell><PageHeader eyebrow={`Good morning, ${user?.name?.split(' ')[0] || 'there'}`} title="The pulse of your people" description="A clear view of what is moving today, and where your attention will matter most." action={<Button onClick={doAttendance} disabled={checkIn.isPending || checkOut.isPending} testId="button-attendance-action">{todayData?.checkIn && !todayData.checkOut ? <><ArrowDownRight size={16} /> Clock out</> : <><Target size={16} /> Start my day</>}</Button>} />
+
+  const btnText = isCompletedToday ? 'Completed for today ✓' : isCheckedIn ? 'Clock out' : 'Start my day';
+
+  return <Shell><PageHeader eyebrow={`Good morning, ${user?.name?.split(' ')[0] || 'there'}`} title="The pulse of your people" description="A clear view of what is moving today, and where your attention will matter most." action={<Button onClick={doAttendance} disabled={isCompletedToday || checkIn.isPending || checkOut.isPending} testId="button-attendance-action">{isCheckedIn ? <><ArrowDownRight size={16} /> Clock out</> : <><Target size={16} /> {btnText}</>}</Button>} />
      <QueryState loading={stats.isLoading} error={stats.error} onRetry={() => stats.refetch()}><div className="stagger">
       <section className="metric-grid">
         <MetricCard label="Total people" value={data?.totalEmployees ?? 0} note="Across your workspace" icon={Users} accent="teal" />
@@ -236,7 +257,7 @@ function Dashboard() {
         <MetricCard label="Needs review" value={data?.pendingLeaves ?? 0} note="Leave requests waiting" icon={FileText} accent="plum" onClick={() => setLocation('/leaves')} />
       </section>
        <section className="dashboard-grid">
-         <div className="panel trend-panel"><div className="panel-head"><div><span className="eyebrow">Attendance rhythm</span><h2>Steady is a signal</h2></div><span className="date-chip">Last 7 days <ChevronDown size={14} /></span></div><div className="chart-legend"><span><i className="legend-present" />Present</span><span><i className="legend-absent" />Absent</span></div><div className="bar-chart">{(trend.length ? trend : Array.from({ length: 7 }, (_, i) => ({ date: String(i), present: 0, absent: 0 }))).map((day, i) => <div className="bar-group" key={`${day.date}-${i}`}><div className="bars"><span className="bar bar-present bar-rise" style={{ height: `${Math.max((day.present / maxTrend) * 100, day.present ? 8 : 3)}%` }} /><span className="bar bar-absent bar-rise" style={{ height: `${Math.max((day.absent / maxTrend) * 100, day.absent ? 8 : 3)}%` }} /></div><small>{weekdayLabel(day.date)}</small></div>)}</div></div>
+         <div className="panel trend-panel"><div className="panel-head"><div><span className="eyebrow">Attendance rhythm</span><h2>Steady is a signal</h2></div><select data-testid="select-trend-days" value={daysLimit} onChange={(e) => setDaysLimit(Number(e.target.value))} className="date-chip-select bg-muted/60 border border-border px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer outline-none text-foreground"><option value={7}>Last 7 days</option><option value={14}>Last 14 days</option><option value={30}>Last 30 days</option></select></div><div className="chart-legend"><span><i className="legend-present" />Present</span><span><i className="legend-absent" />Absent</span></div><div className="bar-chart">{(trend.length ? trend : Array.from({ length: 7 }, (_, i) => ({ date: String(i), present: 0, absent: 0 }))).map((day, i) => <div className="bar-group" key={`${day.date}-${i}`}><div className="bars"><span className="bar bar-present bar-rise" style={{ height: `${Math.max((day.present / maxTrend) * 100, day.present ? 8 : 3)}%` }} /><span className="bar bar-absent bar-rise" style={{ height: `${Math.max((day.absent / maxTrend) * 100, day.absent ? 8 : 3)}%` }} /></div><small>{weekdayLabel(day.date)}</small></div>)}</div></div>
          <div className="panel focus-panel"><div className="panel-head"><div><span className="eyebrow">My day</span><h2>Make it count</h2></div><Clock3 size={20} className="panel-icon" /></div><div className="focus-time">{formatTime(todayData?.checkIn)}</div><p>{todayData?.checkIn ? todayData.checkOut ? `Wrapped up at ${formatTime(todayData.checkOut)}` : 'Your day is in motion.' : 'Clock in when you are ready.'}</p><div className="day-progress"><span style={{ width: todayData?.checkOut ? '100%' : todayData?.checkIn ? '47%' : '0%' }} /></div><div className="focus-meta"><span>Today</span><strong>{todayData?.workHours ? `${todayData.workHours}h logged` : 'No hours logged yet'}</strong></div></div>
        </section>
        <section className="dashboard-grid lower-grid"><div className="panel"><div className="panel-head"><div><span className="eyebrow">Team map</span><h2>Where people sit</h2></div><Link href="/employees" className="text-link" data-testid="link-view-people">View directory <ArrowRight size={14} /></Link></div><div className="department-list">{(data?.departmentDistribution || []).slice(0, 5).map((dept, i) => <div className="department-row" key={dept.department}><span className={`department-avatar dept-${i}`}>{initials(dept.department)}</span><span className="department-name">{dept.department}</span><div className="mini-track"><span style={{ width: `${data?.totalEmployees ? (dept.count / data.totalEmployees) * 100 : 0}%` }} /></div><strong>{dept.count}</strong></div>)}</div></div><div className="panel"><div className="panel-head"><div><span className="eyebrow">Attention queue</span><h2>Leave requests</h2></div><Link href="/leaves" className="text-link" data-testid="link-view-leaves">Open desk <ArrowRight size={14} /></Link></div>{leaves.isLoading ? <Skeleton className="h-24" /> : pending.length ? <div className="request-list">{pending.map((leave) => <Link href="/leaves" className="request-row" key={leave.id} data-testid={`row-pending-leave-${leave.id}`}><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'Team member'}</strong><small>{leave.type} · {shortDate(leave.startDate)}</small></span><StatusPill value={leave.status} /></Link>)}</div> : <div className="compact-empty"><Check size={16} />Nothing waiting for your review.</div>}</div></section>
@@ -280,7 +301,21 @@ function Attendance() {
   const checkOut = useCheckOut();
   const qc = useQueryClient();
   const todayData = today.data;
-  const action = () => { const mutation = todayData?.checkIn && !todayData.checkOut ? checkOut : checkIn; mutation.mutate(undefined, { onSuccess: () => { qc.invalidateQueries({ queryKey: getGetAttendanceTodayQueryKey() }); qc.invalidateQueries({ queryKey: getGetAttendanceLogsQueryKey() }); } }); };
+  const action = () => {
+    const mutation = todayData?.checkIn && !todayData.checkOut ? checkOut : checkIn;
+    mutation.mutate(undefined, {
+      onSuccess: async () => {
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: getGetAttendanceTodayQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetAttendanceLogsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() }),
+          qc.invalidateQueries({ queryKey: getGetMeQueryKey() }),
+        ]);
+        await today.refetch();
+        await logs.refetch();
+      },
+    });
+  };
   return <Shell><PageHeader eyebrow="Attendance desk" title="Time, with context" description="A lightweight record of presence that keeps the whole team in sync." action={<Button onClick={action} testId="button-attendance-toggle">{todayData?.checkIn && !todayData.checkOut ? 'Clock out' : 'Clock in'} <ArrowRight size={15} /></Button>} /><div className="attendance-summary"><div className="panel attendance-clock"><span className="eyebrow">Your attendance today</span><div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div><div className="clock-meta"><StatusPill value={todayData?.status || 'Not started'} /><span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span></div></div><div className="panel attendance-streak"><span className="eyebrow">This week</span><div className="streak-dots">{Array.from({ length: 5 }).map((_, i) => <span key={i} className={i < 3 ? 'done' : ''}><Check size={13} /></span>)}</div><strong>3 of 5 days recorded</strong><p>Consistency creates useful visibility.</p></div></div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div><div className="segmented"><button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button><button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button></div></div><QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>{logs.data?.length ? <AttendanceTable logs={logs.data} /> : <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>}</QueryState></div></Shell>;
 }
 

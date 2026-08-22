@@ -80,6 +80,119 @@ async function allAsync(text, params = []) {
   return await allSqlite(text, params);
 }
 
+async function seedDemoData() {
+  try {
+    const empPasswordHash = await bcrypt.hash('emp123', 10);
+    const adminPasswordHash = await bcrypt.hash('admin123', 10);
+
+    // 1. Admin
+    let admin = await getAsync(`SELECT id FROM users WHERE email = $1`, ['admin@dayflow.com']);
+    if (!admin) {
+      const res = await queryAsync(`
+        INSERT INTO users (employee_id, name, email, phone, password_hash, role, company_name, department, job_position, joining_date, address, avatar_url, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id
+      `, [
+        'OIADUS20220001', 'Admin Officer', 'admin@dayflow.com', '+91 9876543210',
+        adminPasswordHash, 'ADMIN', 'Odoo India', 'Human Resources', 'HR Director',
+        '2022-01-15', 'Mumbai HQ Office, India', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin', 'PRESENT'
+      ]);
+      admin = { id: res.rows?.[0]?.id || 1 };
+    }
+
+    // 2. John Doe
+    let john = await getAsync(`SELECT id FROM users WHERE email = $1`, ['john.doe@dayflow.com']);
+    if (!john) {
+      const res = await queryAsync(`
+        INSERT INTO users (employee_id, name, email, phone, password_hash, role, company_name, department, job_position, joining_date, address, avatar_url, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id
+      `, [
+        'OIJODO20230002', 'John Doe', 'john.doe@dayflow.com', '+91 9123456789',
+        empPasswordHash, 'EMPLOYEE', 'Odoo India', 'Engineering', 'Full Stack Developer',
+        '2023-06-01', 'Flat 402, Green Valley, Pune', 'https://api.dicebear.com/7.x/avataaars/svg?seed=John', 'PRESENT'
+      ]);
+      john = { id: res.rows?.[0]?.id || 2 };
+    }
+
+    // 3. Sarah Smith
+    let sarah = await getAsync(`SELECT id FROM users WHERE email = $1`, ['sarah.smith@dayflow.com']);
+    if (!sarah) {
+      const res = await queryAsync(`
+        INSERT INTO users (employee_id, name, email, phone, password_hash, role, company_name, department, job_position, joining_date, address, avatar_url, status)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING id
+      `, [
+        'OISASM20240003', 'Sarah Smith', 'sarah.smith@dayflow.com', '+91 9988776655',
+        empPasswordHash, 'EMPLOYEE', 'Odoo India', 'Product', 'UX Designer',
+        '2024-02-10', 'B-12, Park Street, Bengaluru', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah', 'ON_LEAVE'
+      ]);
+      sarah = { id: res.rows?.[0]?.id || 3 };
+    }
+
+    const johnId = john.id;
+    const sarahId = sarah.id;
+
+    // Seed leave allocations if missing for john
+    const johnAlloc = await getAsync(`SELECT COUNT(*) as count FROM leave_allocations WHERE user_id = $1`, [johnId]);
+    if (parseInt(johnAlloc?.count || johnAlloc?.['COUNT(*)'] || 0, 10) === 0) {
+      await queryAsync(`
+        INSERT INTO leave_allocations (user_id, leave_type, allocated_days, year)
+        VALUES 
+          (${johnId}, 'PAID', 24, 2026),
+          (${johnId}, 'SICK', 12, 2026),
+          (${sarahId}, 'PAID', 24, 2026),
+          (${sarahId}, 'SICK', 12, 2026)
+      `);
+    }
+
+    // Seed Payroll for john if missing
+    const johnPayroll = await getAsync(`SELECT COUNT(*) as count FROM payroll WHERE user_id = $1`, [johnId]);
+    if (parseInt(johnPayroll?.count || johnPayroll?.['COUNT(*)'] || 0, 10) === 0) {
+      await queryAsync(`
+        INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
+        VALUES (${johnId}, 75000, 37500, 18750, 4998.75, 3123.75, 3123.75, 7503.75, 4500, 200, 70300)
+      `);
+    }
+
+    const sarahPayroll = await getAsync(`SELECT COUNT(*) as count FROM payroll WHERE user_id = $1`, [sarahId]);
+    if (parseInt(sarahPayroll?.count || sarahPayroll?.['COUNT(*)'] || 0, 10) === 0) {
+      await queryAsync(`
+        INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
+        VALUES (${sarahId}, 60000, 30000, 15000, 3999, 2499, 2499, 6003, 3600, 200, 56200)
+      `);
+    }
+
+    // Seed Attendance logs for john if missing
+    const johnAtt = await getAsync(`SELECT COUNT(*) as count FROM attendance WHERE user_id = $1`, [johnId]);
+    if (parseInt(johnAtt?.count || johnAtt?.['COUNT(*)'] || 0, 10) === 0) {
+      await queryAsync(`
+        INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
+        VALUES 
+          (${johnId}, '2026-08-18', '09:05:00', '17:35:00', 8.50, 'PRESENT'),
+          (${johnId}, '2026-08-19', '09:00:00', '17:30:00', 8.50, 'PRESENT'),
+          (${johnId}, '2026-08-20', '09:12:00', '17:45:00', 8.55, 'PRESENT'),
+          (${johnId}, '2026-08-21', '09:00:00', '17:30:00', 8.50, 'PRESENT')
+      `);
+    }
+
+    // Seed Leaves for john if missing
+    const johnLeaves = await getAsync(`SELECT COUNT(*) as count FROM leaves WHERE user_id = $1`, [johnId]);
+    if (parseInt(johnLeaves?.count || johnLeaves?.['COUNT(*)'] || 0, 10) === 0) {
+      await queryAsync(`
+        INSERT INTO leaves (user_id, leave_type, start_date, end_date, total_days, reason, status)
+        VALUES 
+          (${johnId}, 'PAID', '2026-07-10', '2026-07-12', 3, 'Summer vacation with family', 'APPROVED'),
+          (${johnId}, 'SICK', '2026-08-04', '2026-08-05', 2, 'Dental checkup and recovery', 'APPROVED'),
+          (${johnId}, 'PAID', '2026-09-01', '2026-09-03', 3, 'Attending developer conference', 'PENDING'),
+          (${sarahId}, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
+      `);
+    }
+  } catch (err) {
+    console.error('seedDemoData error:', err.message);
+  }
+}
+
 async function initDB() {
   const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/dayflow';
   
@@ -183,116 +296,9 @@ async function initDB() {
       );
     `);
 
-    // Check if seed data exists
-    const countRow = await getAsync(`SELECT COUNT(*) as count FROM users`);
-    const count = countRow ? parseInt(countRow.count || countRow['COUNT(*)'] || countRow['count'], 10) : 0;
-
-    if (count === 0) {
-      const adminPasswordHash = await bcrypt.hash('admin123', 10);
-      const empPasswordHash = await bcrypt.hash('emp123', 10);
-
-      // Admin User
-      await queryAsync(`
-        INSERT INTO users (employee_id, name, email, phone, password_hash, role, company_name, department, job_position, joining_date, address, avatar_url, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      `, [
-        'OIADUS20220001',
-        'Admin Officer',
-        'admin@dayflow.com',
-        '+91 9876543210',
-        adminPasswordHash,
-        'ADMIN',
-        'Odoo India',
-        'Human Resources',
-        'HR Director',
-        '2022-01-15',
-        'Mumbai HQ Office, India',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Admin',
-        'PRESENT'
-      ]);
-
-      // Employee 1 (John Doe)
-      await queryAsync(`
-        INSERT INTO users (employee_id, name, email, phone, password_hash, role, company_name, department, job_position, joining_date, address, avatar_url, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      `, [
-        'OIJODO20230002',
-        'John Doe',
-        'john.doe@dayflow.com',
-        '+91 9123456789',
-        empPasswordHash,
-        'EMPLOYEE',
-        'Odoo India',
-        'Engineering',
-        'Full Stack Developer',
-        '2023-06-01',
-        'Flat 402, Green Valley, Pune',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=John',
-        'PRESENT'
-      ]);
-
-      // Employee 2 (Sarah Smith)
-      await queryAsync(`
-        INSERT INTO users (employee_id, name, email, phone, password_hash, role, company_name, department, job_position, joining_date, address, avatar_url, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      `, [
-        'OISASM20240003',
-        'Sarah Smith',
-        'sarah.smith@dayflow.com',
-        '+91 9988776655',
-        empPasswordHash,
-        'EMPLOYEE',
-        'Odoo India',
-        'Product',
-        'UX Designer',
-        '2024-02-10',
-        'B-12, Park Street, Bengaluru',
-        'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-        'ON_LEAVE'
-      ]);
-
-      // Seed leave allocations
-      await queryAsync(`
-        INSERT INTO leave_allocations (user_id, leave_type, allocated_days, year)
-        VALUES 
-          (2, 'PAID', 24, 2026),
-          (2, 'SICK', 12, 2026),
-          (3, 'PAID', 24, 2026),
-          (3, 'SICK', 12, 2026)
-      `);
-
-      // Seed Payroll
-      await queryAsync(`
-        INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
-        VALUES (2, 75000, 37500, 18750, 4998.75, 3123.75, 3123.75, 7503.75, 4500, 200, 70300)
-      `);
-      await queryAsync(`
-        INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
-        VALUES (3, 60000, 30000, 15000, 3999, 2499, 2499, 6003, 3600, 200, 56200)
-      `);
-
-      // Seed attendance logs for John Doe (User 2)
-      await queryAsync(`
-        INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
-        VALUES 
-          (2, '2026-08-18', '09:05:00', '17:35:00', 8.50, 'PRESENT'),
-          (2, '2026-08-19', '09:00:00', '17:30:00', 8.50, 'PRESENT'),
-          (2, '2026-08-20', '09:12:00', '17:45:00', 8.55, 'PRESENT'),
-          (2, '2026-08-21', '09:00:00', '17:30:00', 8.50, 'PRESENT')
-      `);
-
-      // Seed leave history for John Doe (User 2)
-      await queryAsync(`
-        INSERT INTO leaves (user_id, leave_type, start_date, end_date, total_days, reason, status)
-        VALUES 
-          (2, 'PAID', '2026-07-10', '2026-07-12', 3, 'Summer vacation with family', 'APPROVED'),
-          (2, 'SICK', '2026-08-04', '2026-08-05', 2, 'Dental checkup and recovery', 'APPROVED'),
-          (2, 'PAID', '2026-09-01', '2026-09-03', 3, 'Attending developer conference', 'PENDING'),
-          (3, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
-      `);
-
-      console.log('✅ Database Initialized & Seeded Successfully!');
-    }
+    // Always ensure demo data is populated
+    await seedDemoData();
+    console.log('✅ Database Initialized & Seeded Successfully!');
   } catch (err) {
     console.error('Database Initialization Error:', err.message);
   }

@@ -180,13 +180,13 @@ export const useSignup = () => {
   });
 };
 
-export const useGetDashboardStats = () => {
+export const useGetDashboardStats = (days: number = 7) => {
   return useQuery({
-    queryKey: getGetDashboardStatsQueryKey(),
+    queryKey: [...getGetDashboardStatsQueryKey(), days],
     queryFn: async () => {
       try {
-        const res = await apiClient.get('/dashboard/stats');
-        const d = res.data.stats;
+        const res = await apiClient.get('/dashboard/stats', { params: { days } });
+        const d = res.data.stats || res.data;
         return {
           totalEmployees: d.totalEmployees || 0,
           presentToday: d.presentToday || 0,

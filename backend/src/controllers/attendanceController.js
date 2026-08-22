@@ -8,7 +8,11 @@ async function checkIn(req, res) {
 
     let record = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date = $2`, [userId, today]);
 
-    if (record && record.check_in && !record.check_out) {
+    if (record && record.check_in && record.check_out) {
+      return res.status(400).json({ success: false, error: 'Attendance already completed for today', record });
+    }
+
+    if (record && record.check_in) {
       return res.status(400).json({ success: false, error: 'Already checked in for today', record });
     }
 
@@ -17,12 +21,6 @@ async function checkIn(req, res) {
         INSERT INTO attendance (user_id, date, check_in, status)
         VALUES ($1, $2, $3, 'PRESENT')
       `, [userId, today, nowTime]);
-    } else {
-      await queryAsync(`
-        UPDATE attendance
-        SET check_in = $1, check_out = NULL, status = 'PRESENT'
-        WHERE id = $2
-      `, [nowTime, record.id]);
     }
 
     await queryAsync(`UPDATE users SET status = 'PRESENT' WHERE id = $1`, [userId]);

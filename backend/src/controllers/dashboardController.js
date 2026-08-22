@@ -4,6 +4,7 @@ async function getDashboardStats(req, res) {
   try {
     const requestingUser = req.user;
     const today = new Date().toISOString().split('T')[0];
+    const daysLimit = parseInt(req.query.days || 7, 10);
 
     const totalEmpRow = await getAsync(`SELECT COUNT(*) as count FROM users`);
     const totalEmployees = parseInt(totalEmpRow?.count || totalEmpRow?.['COUNT(*)'] || 0, 10);
@@ -43,22 +44,23 @@ async function getDashboardStats(req, res) {
       count: parseInt(d.count || 0, 10),
     }));
 
-    // Weekly attendance trend
-    const trendRows = await allAsync(`
-      SELECT date, 
-             SUM(CASE WHEN check_in IS NOT NULL THEN 1 ELSE 0 END) as present,
-             SUM(CASE WHEN status = 'ABSENT' THEN 1 ELSE 0 END) as absent
-      FROM attendance
-      GROUP BY date
-      ORDER BY date DESC
-      LIMIT 7
-    `);
+    // Dynamic Attendance trend for past N days
+    const dates = [];
+    for (let i = daysLimit - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
 
-    const attendanceTrend = (trendRows || []).map((t) => ({
-      date: t.date,
-      present: parseInt(t.present || 0, 10),
-      absent: parseInt(t.absent || 0, 10),
-    }));
+    const attendanceTrend = [];
+    for (const d of dates) {
+      const pRow = await getAsync(`SELECT COUNT(DISTINCT user_id) as count FROM attendance WHERE date = $1 AND check_in IS NOT NULL`, [d]);
+      const present = parseInt(pRow?.count || pRow?.['COUNT(*)'] || 0, 10);
+      const onLRow = await getAsync(`SELECT COUNT(DISTINCT user_id) as count FROM leaves WHERE status = 'APPROVED' AND start_date <= $1 AND end_date >= $1`, [d]);
+      const onLeaveCount = parseInt(onLRow?.count || onLRow?.['COUNT(*)'] || 0, 10);
+      const absent = Math.max(0, totalEmployees - present - onLeaveCount);
+      attendanceTrend.push({ date: d, present, absent });
+    }
 
     return res.json({
       success: true,
