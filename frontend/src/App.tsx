@@ -299,24 +299,20 @@ function Attendance() {
   const today = useGetAttendanceToday();
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
-  const qc = useQueryClient();
   const todayData = today.data;
+
+  const isCompletedToday = !!(todayData?.checkIn && todayData?.checkOut);
+  const isCheckedIn = !!(todayData?.checkIn && !todayData?.checkOut);
+
   const action = () => {
-    const mutation = todayData?.checkIn && !todayData.checkOut ? checkOut : checkIn;
-    mutation.mutate(undefined, {
-      onSuccess: async () => {
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: getGetAttendanceTodayQueryKey() }),
-          qc.invalidateQueries({ queryKey: getGetAttendanceLogsQueryKey() }),
-          qc.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() }),
-          qc.invalidateQueries({ queryKey: getGetMeQueryKey() }),
-        ]);
-        await today.refetch();
-        await logs.refetch();
-      },
-    });
+    if (isCompletedToday) return;
+    const mutation = isCheckedIn ? checkOut : checkIn;
+    mutation.mutate();
   };
-  return <Shell><PageHeader eyebrow="Attendance desk" title="Time, with context" description="A lightweight record of presence that keeps the whole team in sync." action={<Button onClick={action} testId="button-attendance-toggle">{todayData?.checkIn && !todayData.checkOut ? 'Clock out' : 'Clock in'} <ArrowRight size={15} /></Button>} /><div className="attendance-summary"><div className="panel attendance-clock"><span className="eyebrow">Your attendance today</span><div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div><div className="clock-meta"><StatusPill value={todayData?.status || 'Not started'} /><span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span></div></div><div className="panel attendance-streak"><span className="eyebrow">This week</span><div className="streak-dots">{Array.from({ length: 5 }).map((_, i) => <span key={i} className={i < 3 ? 'done' : ''}><Check size={13} /></span>)}</div><strong>3 of 5 days recorded</strong><p>Consistency creates useful visibility.</p></div></div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div><div className="segmented"><button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button><button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button></div></div><QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>{logs.data?.length ? <AttendanceTable logs={logs.data} /> : <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>}</QueryState></div></Shell>;
+
+  const btnText = isCompletedToday ? 'Completed for today ✓' : isCheckedIn ? 'Clock out' : 'Clock in';
+
+  return <Shell><PageHeader eyebrow="Attendance desk" title="Time, with context" description="A lightweight record of presence that keeps the whole team in sync." action={<Button onClick={action} disabled={isCompletedToday || checkIn.isPending || checkOut.isPending} testId="button-attendance-toggle">{isCheckedIn ? <><ArrowDownRight size={15} /> Clock out</> : <><Target size={15} /> {btnText}</>}</Button>} /><div className="attendance-summary"><div className="panel attendance-clock"><span className="eyebrow">Your attendance today</span><div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div><div className="clock-meta"><StatusPill value={todayData?.status || 'Not started'} /><span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span></div></div><div className="panel attendance-streak"><span className="eyebrow">This week</span><div className="streak-dots">{Array.from({ length: 5 }).map((_, i) => <span key={i} className={i < (logs.data?.length || 0) ? 'done' : ''}><Check size={13} /></span>)}</div><strong>{logs.data?.length || 0} of 5 days recorded</strong><p>Consistency creates useful visibility.</p></div></div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div><div className="segmented"><button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button><button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button></div></div><QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>{logs.data?.length ? <AttendanceTable logs={logs.data} /> : <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>}</QueryState></div></Shell>;
 }
 
 function AttendanceTable({ logs }: { logs: Attendance[] }) {

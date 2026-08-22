@@ -139,11 +139,11 @@ async function seedDemoData() {
       await queryAsync(`
         INSERT INTO leave_allocations (user_id, leave_type, allocated_days, year)
         VALUES 
-          (${johnId}, 'PAID', 24, 2026),
-          (${johnId}, 'SICK', 12, 2026),
-          (${sarahId}, 'PAID', 24, 2026),
-          (${sarahId}, 'SICK', 12, 2026)
-      `);
+          ($1, 'PAID', 24, 2026),
+          ($1, 'SICK', 12, 2026),
+          ($2, 'PAID', 24, 2026),
+          ($2, 'SICK', 12, 2026)
+      `, [johnId, sarahId]);
     }
 
     // Seed Payroll for john if missing
@@ -151,17 +151,24 @@ async function seedDemoData() {
     if (parseInt(johnPayroll?.count || johnPayroll?.['COUNT(*)'] || 0, 10) === 0) {
       await queryAsync(`
         INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
-        VALUES (${johnId}, 75000, 37500, 18750, 4998.75, 3123.75, 3123.75, 7503.75, 4500, 200, 70300)
-      `);
+        VALUES ($1, 75000, 37500, 18750, 4998.75, 3123.75, 3123.75, 7503.75, 4500, 200, 70300)
+      `, [johnId]);
     }
 
     const sarahPayroll = await getAsync(`SELECT COUNT(*) as count FROM payroll WHERE user_id = $1`, [sarahId]);
     if (parseInt(sarahPayroll?.count || sarahPayroll?.['COUNT(*)'] || 0, 10) === 0) {
       await queryAsync(`
         INSERT INTO payroll (user_id, monthly_wage, basic_salary, hra, standard_allowance, performance_bonus, lta, fixed_allowance, pf_deduction, prof_tax, net_salary)
-        VALUES (${sarahId}, 60000, 30000, 15000, 3999, 2499, 2499, 6003, 3600, 200, 56200)
-      `);
+        VALUES ($1, 60000, 30000, 15000, 3999, 2499, 2499, 6003, 3600, 200, 56200)
+      `, [sarahId]);
     }
+
+    // Dynamic past 4 days relative to today
+    const now = new Date();
+    const d1 = new Date(now.getTime() - 86400000 * 1).toISOString().split('T')[0];
+    const d2 = new Date(now.getTime() - 86400000 * 2).toISOString().split('T')[0];
+    const d3 = new Date(now.getTime() - 86400000 * 3).toISOString().split('T')[0];
+    const d4 = new Date(now.getTime() - 86400000 * 4).toISOString().split('T')[0];
 
     // Seed Attendance logs for john if missing
     const johnAtt = await getAsync(`SELECT COUNT(*) as count FROM attendance WHERE user_id = $1`, [johnId]);
@@ -169,11 +176,11 @@ async function seedDemoData() {
       await queryAsync(`
         INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
         VALUES 
-          (${johnId}, '2026-08-18', '09:05:00', '17:35:00', 8.50, 'PRESENT'),
-          (${johnId}, '2026-08-19', '09:00:00', '17:30:00', 8.50, 'PRESENT'),
-          (${johnId}, '2026-08-20', '09:12:00', '17:45:00', 8.55, 'PRESENT'),
-          (${johnId}, '2026-08-21', '09:00:00', '17:30:00', 8.50, 'PRESENT')
-      `);
+          ($1, $2, '09:05:00', '17:35:00', 8.50, 'PRESENT'),
+          ($1, $3, '09:00:00', '17:30:00', 8.50, 'PRESENT'),
+          ($1, $4, '09:12:00', '17:45:00', 8.55, 'PRESENT'),
+          ($1, $5, '09:00:00', '17:30:00', 8.50, 'PRESENT')
+      `, [johnId, d4, d3, d2, d1]);
     }
 
     // Seed Leaves for john if missing
@@ -182,11 +189,11 @@ async function seedDemoData() {
       await queryAsync(`
         INSERT INTO leaves (user_id, leave_type, start_date, end_date, total_days, reason, status)
         VALUES 
-          (${johnId}, 'PAID', '2026-07-10', '2026-07-12', 3, 'Summer vacation with family', 'APPROVED'),
-          (${johnId}, 'SICK', '2026-08-04', '2026-08-05', 2, 'Dental checkup and recovery', 'APPROVED'),
-          (${johnId}, 'PAID', '2026-09-01', '2026-09-03', 3, 'Attending developer conference', 'PENDING'),
-          (${sarahId}, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
-      `);
+          ($1, 'PAID', '2026-07-10', '2026-07-12', 3, 'Summer vacation with family', 'APPROVED'),
+          ($1, 'SICK', '2026-08-04', '2026-08-05', 2, 'Dental checkup and recovery', 'APPROVED'),
+          ($1, 'PAID', '2026-09-01', '2026-09-03', 3, 'Attending developer conference', 'PENDING'),
+          ($2, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
+      `, [johnId, sarahId]);
     }
   } catch (err) {
     console.error('seedDemoData error:', err.message);

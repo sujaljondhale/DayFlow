@@ -150,7 +150,6 @@ export const useGetMe = () => {
     },
     enabled: !!localStorage.getItem('dayflow_token'),
     retry: false,
-    staleTime: Infinity,
   });
 };
 
@@ -251,19 +250,27 @@ export const useGetAttendanceLogs = (params?: { startDate?: string; endDate?: st
 };
 
 export const useCheckIn = () => {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const res = await apiClient.post('/attendance/check-in');
       return res.data;
     },
+    onSuccess: () => {
+      qc.invalidateQueries();
+    },
   });
 };
 
 export const useCheckOut = () => {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       const res = await apiClient.post('/attendance/check-out');
       return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries();
     },
   });
 };
