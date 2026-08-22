@@ -174,7 +174,7 @@ async function initDB() {
       INSERT INTO leaves (user_id, leave_type, start_date, end_date, total_days, reason, status)
       VALUES (3, 'PAID', '2026-08-20', '2026-08-24', 5, 'Family vacation', 'APPROVED')
     `);
-    console.log('✅ SQLite Database Seeded with Sample Dayflow Data');
+    console.log(' SQLite Database Seeded with Sample Dayflow Data');
   }
 }
 module.exports = {
