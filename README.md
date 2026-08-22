@@ -8,6 +8,9 @@ Built for the **Odoo Hackathon**, Dayflow provides separate experiences for **Ad
 
 The system covers authentication, employee profiles, attendance tracking, leave requests, payroll, dashboards, analytics, and role-based access control.
 
+### Website link: https://day-flow-it9a.vercel.app/dashboard
+
+### Video link: https://drive.google.com/file/d/1w4F6YTRqiGNB-fwoadNjcBwOGnLWUEfH/view?usp=sharing
 ---
 
 ## ✨ Features
