@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, BarChart3, Bell, CalendarDays,
   Check, CheckCircle2, ChevronDown, Clock3, Eye, FileText, Filter, LayoutDashboard,
-  LifeBuoy, Menu, MoreHorizontal, Pencil, Plus, Search, Settings2,
+  LifeBuoy, LogOut, Menu, MoreHorizontal, Pencil, Plus, Search, Settings2,
   ShieldCheck, Sparkles, Target, Users, WalletCards, X, XCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -28,14 +28,17 @@ import Signup from '@/pages/auth/Signup';
 
 const queryClient = new QueryClient();
 
-const navItems: { label: string; href: string; icon: LucideIcon; section: string }[] = [
-  { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, section: 'Workspace' },
-  { label: 'People', href: '/employees', icon: Users, section: 'Workspace' },
-  { label: 'Attendance', href: '/attendance', icon: Clock3, section: 'Workspace' },
-  { label: 'Leave desk', href: '/leaves', icon: CalendarDays, section: 'Workspace' },
-  { label: 'Payroll', href: '/payroll', icon: WalletCards, section: 'Workspace' },
-  { label: 'Reports', href: '/reports', icon: BarChart3, section: 'Insights' },
-];
+const getNavItems = (role?: string): { label: string; href: string; icon: LucideIcon; section: string }[] => {
+  const isAdmin = role?.toLowerCase().includes('admin') || role?.toLowerCase().includes('hr');
+  return [
+    { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, section: 'Workspace' },
+    isAdmin ? { label: 'People', href: '/employees', icon: Users, section: 'Workspace' } : null,
+    { label: 'Attendance', href: '/attendance', icon: Clock3, section: 'Workspace' },
+    { label: 'Leave desk', href: '/leaves', icon: CalendarDays, section: 'Workspace' },
+    { label: 'Payroll', href: '/payroll', icon: WalletCards, section: 'Workspace' },
+    isAdmin ? { label: 'Reports', href: '/reports', icon: BarChart3, section: 'Insights' } : null,
+  ].filter(Boolean) as { label: string; href: string; icon: LucideIcon; section: string }[];
+};
 
 const initials = (name?: string | null) => (name || 'DF').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
 const money = (value?: number | null) => `₹${Math.round(value || 0).toLocaleString('en-IN')}`;
@@ -96,13 +99,18 @@ function QueryState({ loading, error, onRetry, children }: { loading?: boolean; 
   return <>{children}</>;
 }
 
-function Sidebar({ user, onClose }: { user?: User; onClose?: () => void }) {
+function Sidebar({ user, onClose, pendingLeavesCount = 0 }: { user?: User; onClose?: () => void; pendingLeavesCount?: number }) {
   const [location] = useLocation();
+  const items = getNavItems(user?.role);
   return <aside className="sidebar side-glass">
     <div className="brand-row"><div className="brand-mark">D</div><span>dayflow</span><button data-testid="button-close-menu" onClick={onClose} className="mobile-close"><X size={18} /></button></div>
     <div className="company-switcher"><div className="company-orb">O</div><div><strong>{user?.company || 'Orbit & Co.'}</strong><small>People operations</small></div><ChevronDown size={15} /></div>
     <nav className="sidebar-nav">
-      {['Workspace', 'Insights'].map((section) => <div key={section} className="nav-section"><span className="nav-caption">{section}</span>{navItems.filter((item) => item.section === section).map(({ label, href, icon: Icon }) => <Link key={href} href={href} data-testid={`link-${label.toLowerCase().replaceAll(' ', '-')}`} className={`nav-link ${location === href || (href === '/employees' && location.startsWith('/employees/')) ? 'active' : ''}`} onClick={onClose}><Icon size={17} /><span>{label}</span>{label === 'Leave desk' && <span className="nav-count">3</span>}</Link>)}</div>)}
+      {['Workspace', 'Insights'].map((section) => {
+        const sectionItems = items.filter((item) => item.section === section);
+        if (!sectionItems.length) return null;
+        return <div key={section} className="nav-section"><span className="nav-caption">{section}</span>{sectionItems.map(({ label, href, icon: Icon }) => <Link key={href} href={href} data-testid={`link-${label.toLowerCase().replaceAll(' ', '-')}`} className={`nav-link ${location === href || (href === '/employees' && location.startsWith('/employees/')) ? 'active' : ''}`} onClick={onClose}><Icon size={17} /><span>{label}</span>{label === 'Leave desk' && pendingLeavesCount > 0 && <span className="nav-count">{pendingLeavesCount}</span>}</Link>)}</div>
+      })}
     </nav>
     <div className="sidebar-bottom">
       <Link href="/settings" data-testid="link-settings" className="nav-link"><Settings2 size={17} /><span>Settings</span></Link>
@@ -113,14 +121,67 @@ function Sidebar({ user, onClose }: { user?: User; onClose?: () => void }) {
 
 function Topbar({ user, onMenu }: { user?: User; onMenu: () => void }) {
   const [, setLocation] = useLocation();
-  return <div className="topbar"><button data-testid="button-open-menu" onClick={onMenu} className="mobile-menu"><Menu size={20} /></button><div className="topbar-context"><span className="live-dot pulse-dot" />All systems calm <span className="topbar-sep">/</span> {user?.company || 'Orbit & Co.'}</div><div className="topbar-actions"><button data-testid="button-search" onClick={() => setLocation('/employees')} className="top-icon"><Search size={18} /></button><button data-testid="button-notifications" onClick={() => setLocation('/leaves')} className="top-icon notification"><Bell size={18} /><i /></button><Link href="/profile" data-testid="link-top-profile" className="top-profile"><Avatar name={user?.name} src={user?.avatar} size="sm" /><span>{user?.name?.split(' ')[0] || 'Profile'}</span><ChevronDown size={14} /></Link></div></div>;
+  const { logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  return <div className="topbar">
+    <button data-testid="button-open-menu" onClick={onMenu} className="mobile-menu"><Menu size={20} /></button>
+    <div className="topbar-context"><span className="live-dot pulse-dot" />All systems calm <span className="topbar-sep">/</span> {user?.company || 'Orbit & Co.'}</div>
+    <div className="topbar-actions">
+      <button data-testid="button-search" onClick={() => setLocation('/employees')} className="top-icon"><Search size={18} /></button>
+      
+      <div className="relative">
+        <button data-testid="button-notifications" onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }} className="top-icon notification"><Bell size={18} /><i /></button>
+        {notifOpen && (
+          <div className="absolute right-0 mt-3 w-72 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-3 border-b border-border font-medium bg-muted/50 text-foreground">Notifications</div>
+            <div className="p-8 text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+              <Bell size={24} className="text-muted-foreground/50" />
+              <span>You have no new notifications.</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="relative">
+        <button onClick={() => { setProfileOpen(!profileOpen); setNotifOpen(false); }} data-testid="link-top-profile" className="top-profile outline-none border-none hover:bg-muted/50 transition-colors rounded-full pr-3">
+          <Avatar name={user?.name} src={user?.avatar} size="sm" />
+          <span>{user?.name?.split(' ')[0] || 'Profile'}</span>
+          <ChevronDown size={14} className="text-muted-foreground" />
+        </button>
+        {profileOpen && (
+          <div className="absolute right-0 mt-3 w-56 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 py-1 animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-4 py-3 border-b border-border mb-1">
+              <p className="text-sm font-medium text-foreground">{user?.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            </div>
+            <button className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2" onClick={() => { setLocation('/profile'); setProfileOpen(false); }}>
+              Profile details
+            </button>
+            <button className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2" onClick={() => { setLocation('/settings'); setProfileOpen(false); }}>
+              Workspace settings
+            </button>
+            <div className="border-t border-border my-1"></div>
+            <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-500/10 transition-colors flex items-center gap-2 font-medium" onClick={() => { logout(); setProfileOpen(false); }}>
+              <LogOut size={16} /> Log out
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>;
 }
 
 function Shell({ children }: { children: ReactNode }) {
   const { data: user } = useGetMe();
   const health = useHealthCheck();
+  const leavesQuery = useGetLeaves();
+  const pendingLeavesCount = (leavesQuery.data || []).filter(l => l.status?.toLowerCase() === 'pending').length;
+  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr');
+  
   const [menuOpen, setMenuOpen] = useState(false);
-  return <div className="app-shell grain"><Sidebar user={user} onClose={() => setMenuOpen(false)} /><div className={`mobile-sidebar ${menuOpen ? 'open' : ''}`}><Sidebar user={user} onClose={() => setMenuOpen(false)} /></div><main className="main-shell"><Topbar user={user} onMenu={() => setMenuOpen(true)} /><div className="health-ribbon" data-testid="status-health"><span className="live-dot pulse-dot" />{health.data?.status || 'Workspace status syncing'}</div><div className="page-content page-enter">{children}</div></main></div>;
+  return <div className="app-shell grain"><Sidebar user={user} onClose={() => setMenuOpen(false)} pendingLeavesCount={isAdmin ? pendingLeavesCount : 0} /><div className={`mobile-sidebar ${menuOpen ? 'open' : ''}`}><Sidebar user={user} onClose={() => setMenuOpen(false)} pendingLeavesCount={isAdmin ? pendingLeavesCount : 0} /></div><main className="main-shell"><Topbar user={user} onMenu={() => setMenuOpen(true)} /><div className="health-ribbon" data-testid="status-health"><span className="live-dot pulse-dot" />{health.data?.status || 'Workspace status syncing'}</div><div className="page-content page-enter">{children}</div></main></div>;
 }
 
 function Dashboard() {
@@ -207,7 +268,11 @@ function Leaves() {
   const balance = useGetLeaveBalance();
   const updateStatus = useUpdateLeaveStatus();
   const [filter, setFilter] = useState('all');
-  const leaves = (query.data || []).filter((leave) => filter === 'all' || leave.status?.toLowerCase() === filter);
+  const { data: user } = useGetMe();
+  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr');
+  const allLeaves = query.data || [];
+  const visibleLeaves = isAdmin ? allLeaves : allLeaves.filter(l => l.user?.email === user?.email || l.userId === user?.id);
+  const leaves = visibleLeaves.filter((leave) => filter === 'all' || leave.status?.toLowerCase() === filter);
   const changeStatus = (id: string, status: string) => updateStatus.mutate({ id, data: { status } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetLeavesQueryKey() }) });
   return <Shell><PageHeader eyebrow="Leave desk" title="Time away, made visible" description="Make room for rest without losing the thread of the work." action={<Link href="/leaves/apply" data-testid="link-apply-leave" className="btn btn-primary"><Plus size={16} /> Apply for leave</Link>} /><div className="balance-grid">{(balance.data || []).map((item) => <div className="balance-card glass" key={item.type}><div className="balance-head"><span>{item.type}</span><CalendarDays size={16} /></div><strong>{item.available}</strong><small>days available</small><div className="balance-track"><span style={{ width: `${item.total ? (item.used / item.total) * 100 : 0}%` }} /></div><div className="balance-foot"><span>{item.used} used</span><span>{item.total} total</span></div></div>)}</div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Request stream</span><h2>Leave requests</h2></div><div className="segmented">{['all', 'pending', 'approved', 'rejected'].map((value) => <button key={value} data-testid={`button-leave-filter-${value}`} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div><QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>{leaves.length ? <div className="table-wrap"><table><thead><tr><th>Person</th><th>Type</th><th>Dates</th><th>Status</th><th className="align-right">Action</th></tr></thead><tbody>{leaves.map((leave) => <tr key={leave.id} data-testid={`row-leave-${leave.id}`}><td><div className="person-cell"><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'You'}</strong><small>{leave.user?.department || 'Personal request'}</small></span></div></td><td>{leave.type}</td><td><strong>{shortDate(leave.startDate)} — {shortDate(leave.endDate)}</strong><small>{leave.reason}</small></td><td><StatusPill value={leave.status} /></td><td className="align-right">{leave.status?.toLowerCase() === 'pending' ? <div className="table-actions"><Button variant="secondary" onClick={() => changeStatus(leave.id, 'approved')} disabled={updateStatus.isPending} testId={`button-approve-leave-${leave.id}`}><Check size={14} /> Approve</Button><Button variant="ghost" onClick={() => changeStatus(leave.id, 'rejected')} disabled={updateStatus.isPending} testId={`button-reject-leave-${leave.id}`}><X size={14} /></Button></div> : <span className="muted-text">Reviewed</span>}</td></tr>)}</tbody></table></div> : <div className="compact-empty"><CalendarDays size={16} />There are no {filter === 'all' ? '' : filter} leave requests.</div>}</QueryState></div></Shell>;
 }
@@ -265,7 +330,7 @@ function Detail({ label, value, mono = false }: { label: string; value?: string 
 
 function Router() {
   const [location] = useLocation();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   
   if (isLoading) {
     return <div className="flex h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
@@ -278,6 +343,12 @@ function Router() {
   }
 
   if (isAuthenticated && isAuthRoute) {
+    return <RedirectTo href="/dashboard" />;
+  }
+  
+  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr');
+  const isProtectedEmployeeRoute = location.startsWith('/employees') || location.startsWith('/reports') || location.startsWith('/settings');
+  if (isAuthenticated && !isAdmin && isProtectedEmployeeRoute) {
     return <RedirectTo href="/dashboard" />;
   }
 
