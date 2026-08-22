@@ -11,7 +11,7 @@ import {
   getGetAttendanceLogsQueryKey, getGetAttendanceTodayQueryKey, getGetDashboardStatsQueryKey,
   getGetEmployeeQueryKey, getGetEmployeesQueryKey, getGetLeaveBalanceQueryKey,
   getGetLeavesQueryKey, getGetMeQueryKey, getGetMyPayrollQueryKey, useApplyLeave,
-  useCheckIn, useCheckOut, useGetAttendanceLogs, useGetAttendanceToday, useGetDashboardStats,
+  useCheckIn, useCheckOut, useMarkAttendance, useGetAttendanceLogs, useGetAttendanceToday, useGetDashboardStats,
   useGetEmployee, useGetEmployees, useGetLeaveBalance, useGetLeaves, useGetMe,
   useGetMyPayroll, useHealthCheck, useLogin, useSignup, useUpdateEmployee, useUpdateLeaveStatus,
   useUpdatePayroll, useSetLeaveAllocation,
