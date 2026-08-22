@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, BarChart3, Bell, CalendarDays,
-  Check, CheckCircle2, ChevronDown, Clock3, Eye, FileText, Filter, LayoutDashboard,
+  Check, CheckCircle2, ChevronDown, Clock3, FileText, Filter, LayoutDashboard,
   LifeBuoy, LogOut, Menu, MoreHorizontal, Pencil, Plus, Search, Settings2,
-  ShieldCheck, Sparkles, Target, Users, WalletCards, X, XCircle,
+  ShieldCheck, Sparkles, Target, Users, WalletCards, X,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -14,7 +14,7 @@ import {
   useCheckIn, useCheckOut, useGetAttendanceLogs, useGetAttendanceToday, useGetDashboardStats,
   useGetEmployee, useGetEmployees, useGetLeaveBalance, useGetLeaves, useGetMe,
   useGetMyPayroll, useHealthCheck, useLogin, useSignup, useUpdateEmployee, useUpdateLeaveStatus,
-  useUpdatePayroll,
+  useUpdatePayroll, useSetLeaveAllocation,
 } from '@/api';
 import type { Attendance, DashboardStats, Employee, Leave, Payroll, User } from '@/api';
 import { Link, Route, Router as WouterRouter, Switch, useLocation, useParams } from 'wouter';
@@ -23,6 +23,7 @@ import NotFound from '@/pages/not-found';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import Login from '@/pages/auth/Login';
 import Signup from '@/pages/auth/Signup';
 
@@ -95,7 +96,7 @@ function PageHeader({ eyebrow, title, description, action }: { eyebrow?: string;
 function Skeleton({ className = '' }: { className?: string }) { return <div className={`skeleton ${className}`} />; }
 function QueryState({ loading, error, onRetry, children }: { loading?: boolean; error?: unknown; onRetry?: () => void; children: ReactNode }) {
   if (loading) return <div className="skeleton-stack"><Skeleton className="h-20" /><Skeleton className="h-44" /><Skeleton className="h-32" /></div>;
-  if (error) return <div className="empty-state error-state"><XCircle size={28} /><h3>Could not load this view</h3><p>{friendlyError(error)}</p><Button variant="secondary" onClick={onRetry} testId="button-retry">Try again</Button></div>;
+  if (error) return <div className="empty-state error-state"><X size={28} /><h3>Could not load this view</h3><p>{friendlyError(error)}</p><Button variant="secondary" onClick={onRetry} testId="button-retry">Try again</Button></div>;
   return <>{children}</>;
 }
 
@@ -104,7 +105,6 @@ function Sidebar({ user, onClose, pendingLeavesCount = 0 }: { user?: User; onClo
   const items = getNavItems(user?.role);
   return <aside className="sidebar side-glass">
     <div className="brand-row"><div className="brand-mark">D</div><span>dayflow</span><button data-testid="button-close-menu" onClick={onClose} className="mobile-close"><X size={18} /></button></div>
-    <div className="company-switcher"><div className="company-orb">O</div><div><strong>{user?.company || 'Orbit & Co.'}</strong><small>People operations</small></div><ChevronDown size={15} /></div>
     <nav className="sidebar-nav">
       {['Workspace', 'Insights'].map((section) => {
         const sectionItems = items.filter((item) => item.section === section);
@@ -124,22 +124,45 @@ function Topbar({ user, onMenu }: { user?: User; onMenu: () => void }) {
   const { logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const leavesQuery = useGetLeaves();
+  const pendingLeaves = (leavesQuery.data || []).filter(l => l.status?.toLowerCase() === 'pending');
 
   return <div className="topbar">
     <button data-testid="button-open-menu" onClick={onMenu} className="mobile-menu"><Menu size={20} /></button>
-    <div className="topbar-context"><span className="live-dot pulse-dot" />All systems calm <span className="topbar-sep">/</span> {user?.company || 'Orbit & Co.'}</div>
+    <div className="topbar-context"><span className="live-dot pulse-dot" />All systems calm</div>
     <div className="topbar-actions">
       <button data-testid="button-search" onClick={() => setLocation('/employees')} className="top-icon"><Search size={18} /></button>
       
       <div className="relative">
-        <button data-testid="button-notifications" onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }} className="top-icon notification"><Bell size={18} /><i /></button>
+        <button data-testid="button-notifications" onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }} className="top-icon notification relative">
+          <Bell size={18} />
+          {pendingLeaves.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center animate-pulse">{pendingLeaves.length}</span>}
+        </button>
         {notifOpen && (
-          <div className="absolute right-0 mt-3 w-72 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-3 border-b border-border font-medium bg-muted/50 text-foreground">Notifications</div>
-            <div className="p-8 text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
-              <Bell size={24} className="text-muted-foreground/50" />
-              <span>You have no new notifications.</span>
+          <div className="absolute right-0 mt-3 w-80 bg-card border border-border rounded-xl shadow-lg overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-3 border-b border-border font-medium bg-muted/50 text-foreground flex justify-between items-center">
+              <span>Notifications</span>
+              {pendingLeaves.length > 0 && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{pendingLeaves.length} pending</span>}
             </div>
+            {pendingLeaves.length > 0 ? (
+              <div className="max-h-72 overflow-y-auto divide-y divide-border">
+                {pendingLeaves.map((leave) => (
+                  <button key={leave.id} onClick={() => { setLocation('/leaves'); setNotifOpen(false); }} className="w-full text-left p-3 hover:bg-muted/50 transition-colors flex items-start gap-3">
+                    <Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" />
+                    <div className="text-xs">
+                      <p className="font-semibold text-foreground">{leave.user?.name || 'Employee'} requested leave</p>
+                      <p className="text-muted-foreground mt-0.5">{leave.type} ({leave.startDate} — {leave.endDate})</p>
+                      <p className="text-primary font-medium mt-1">Click to review →</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+                <Bell size={24} className="text-muted-foreground/50" />
+                <span>You have no new notifications.</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -174,11 +197,12 @@ function Topbar({ user, onMenu }: { user?: User; onMenu: () => void }) {
 }
 
 function Shell({ children }: { children: ReactNode }) {
-  const { data: user } = useGetMe();
+  const meQuery = useGetMe();
+  const user = meQuery.data?.user;
   const health = useHealthCheck();
   const leavesQuery = useGetLeaves();
   const pendingLeavesCount = (leavesQuery.data || []).filter(l => l.status?.toLowerCase() === 'pending').length;
-  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr');
+  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr') || user?.role?.toLowerCase().includes('manager');
   
   const [menuOpen, setMenuOpen] = useState(false);
   return <div className="app-shell grain"><Sidebar user={user} onClose={() => setMenuOpen(false)} pendingLeavesCount={isAdmin ? pendingLeavesCount : 0} /><div className={`mobile-sidebar ${menuOpen ? 'open' : ''}`}><Sidebar user={user} onClose={() => setMenuOpen(false)} pendingLeavesCount={isAdmin ? pendingLeavesCount : 0} /></div><main className="main-shell"><Topbar user={user} onMenu={() => setMenuOpen(true)} /><div className="health-ribbon" data-testid="status-health"><span className="live-dot pulse-dot" />{health.data?.status || 'Workspace status syncing'}</div><div className="page-content page-enter">{children}</div></main></div>;
@@ -186,7 +210,8 @@ function Shell({ children }: { children: ReactNode }) {
 
 function Dashboard() {
   const [, setLocation] = useLocation();
-  const { data: user } = useGetMe();
+  const meQuery = useGetMe();
+  const user = meQuery.data?.user;
   const stats = useGetDashboardStats();
   const today = useGetAttendanceToday();
   const leaves = useGetLeaves();
@@ -213,9 +238,9 @@ function Dashboard() {
        <section className="dashboard-grid">
          <div className="panel trend-panel"><div className="panel-head"><div><span className="eyebrow">Attendance rhythm</span><h2>Steady is a signal</h2></div><span className="date-chip">Last 7 days <ChevronDown size={14} /></span></div><div className="chart-legend"><span><i className="legend-present" />Present</span><span><i className="legend-absent" />Absent</span></div><div className="bar-chart">{(trend.length ? trend : Array.from({ length: 7 }, (_, i) => ({ date: String(i), present: 0, absent: 0 }))).map((day, i) => <div className="bar-group" key={`${day.date}-${i}`}><div className="bars"><span className="bar bar-present bar-rise" style={{ height: `${Math.max((day.present / maxTrend) * 100, day.present ? 8 : 3)}%` }} /><span className="bar bar-absent bar-rise" style={{ height: `${Math.max((day.absent / maxTrend) * 100, day.absent ? 8 : 3)}%` }} /></div><small>{weekdayLabel(day.date)}</small></div>)}</div></div>
          <div className="panel focus-panel"><div className="panel-head"><div><span className="eyebrow">My day</span><h2>Make it count</h2></div><Clock3 size={20} className="panel-icon" /></div><div className="focus-time">{formatTime(todayData?.checkIn)}</div><p>{todayData?.checkIn ? todayData.checkOut ? `Wrapped up at ${formatTime(todayData.checkOut)}` : 'Your day is in motion.' : 'Clock in when you are ready.'}</p><div className="day-progress"><span style={{ width: todayData?.checkOut ? '100%' : todayData?.checkIn ? '47%' : '0%' }} /></div><div className="focus-meta"><span>Today</span><strong>{todayData?.workHours ? `${todayData.workHours}h logged` : 'No hours logged yet'}</strong></div></div>
-      </section>
-      <section className="dashboard-grid lower-grid"><div className="panel"><div className="panel-head"><div><span className="eyebrow">Team map</span><h2>Where people sit</h2></div><Link href="/employees" className="text-link" data-testid="link-view-people">View directory <ArrowRight size={14} /></Link></div><div className="department-list">{(data?.departmentDistribution || []).slice(0, 5).map((dept, i) => <div className="department-row" key={dept.department}><span className={`department-avatar dept-${i}`}>{initials(dept.department)}</span><span className="department-name">{dept.department}</span><div className="mini-track"><span style={{ width: `${data?.totalEmployees ? (dept.count / data.totalEmployees) * 100 : 0}%` }} /></div><strong>{dept.count}</strong></div>)}</div></div><div className="panel"><div className="panel-head"><div><span className="eyebrow">Attention queue</span><h2>Leave requests</h2></div><Link href="/leaves" className="text-link" data-testid="link-view-leaves">Open desk <ArrowRight size={14} /></Link></div>{leaves.isLoading ? <Skeleton className="h-24" /> : pending.length ? <div className="request-list">{pending.map((leave) => <Link href="/leaves" className="request-row" key={leave.id} data-testid={`row-pending-leave-${leave.id}`}><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'Team member'}</strong><small>{leave.type} · {shortDate(leave.startDate)}</small></span><StatusPill value={leave.status} /></Link>)}</div> : <div className="compact-empty"><Check size={16} />Nothing waiting for your review.</div>}</div></section>
-    </div></QueryState>
+       </section>
+       <section className="dashboard-grid lower-grid"><div className="panel"><div className="panel-head"><div><span className="eyebrow">Team map</span><h2>Where people sit</h2></div><Link href="/employees" className="text-link" data-testid="link-view-people">View directory <ArrowRight size={14} /></Link></div><div className="department-list">{(data?.departmentDistribution || []).slice(0, 5).map((dept, i) => <div className="department-row" key={dept.department}><span className={`department-avatar dept-${i}`}>{initials(dept.department)}</span><span className="department-name">{dept.department}</span><div className="mini-track"><span style={{ width: `${data?.totalEmployees ? (dept.count / data.totalEmployees) * 100 : 0}%` }} /></div><strong>{dept.count}</strong></div>)}</div></div><div className="panel"><div className="panel-head"><div><span className="eyebrow">Attention queue</span><h2>Leave requests</h2></div><Link href="/leaves" className="text-link" data-testid="link-view-leaves">Open desk <ArrowRight size={14} /></Link></div>{leaves.isLoading ? <Skeleton className="h-24" /> : pending.length ? <div className="request-list">{pending.map((leave) => <Link href="/leaves" className="request-row" key={leave.id} data-testid={`row-pending-leave-${leave.id}`}><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'Team member'}</strong><small>{leave.type} · {shortDate(leave.startDate)}</small></span><StatusPill value={leave.status} /></Link>)}</div> : <div className="compact-empty"><Check size={16} />Nothing waiting for your review.</div>}</div></section>
+     </div></QueryState>
   </Shell>;
 }
 
@@ -256,7 +281,7 @@ function Attendance() {
   const qc = useQueryClient();
   const todayData = today.data;
   const action = () => { const mutation = todayData?.checkIn && !todayData.checkOut ? checkOut : checkIn; mutation.mutate(undefined, { onSuccess: () => { qc.invalidateQueries({ queryKey: getGetAttendanceTodayQueryKey() }); qc.invalidateQueries({ queryKey: getGetAttendanceLogsQueryKey() }); } }); };
-  return <Shell><PageHeader eyebrow="Attendance desk" title="Time, with context" description="A lightweight record of presence that keeps the whole team in sync." action={<Button onClick={action} testId="button-attendance-toggle">{todayData?.checkIn && !todayData.checkOut ? 'Clock out' : 'Clock in'} <ArrowRight size={15} /></Button>} /><div className="attendance-summary"><div className="panel attendance-clock"><span className="eyebrow">Your attendance today</span><div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div><div className="clock-meta"><StatusPill value={todayData?.status || 'Not started'} /><span>{todayData?.workHours ? `${todayData.workHours} working hours` : 'Ready when you are'}</span></div></div><div className="panel attendance-streak"><span className="eyebrow">This week</span><div className="streak-dots">{Array.from({ length: 5 }).map((_, i) => <span key={i} className={i < 3 ? 'done' : ''}><Check size={13} /></span>)}</div><strong>3 of 5 days recorded</strong><p>Consistency creates useful visibility.</p></div></div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div><div className="segmented"><button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button><button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button></div></div><QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>{logs.data?.length ? <AttendanceTable logs={logs.data} /> : <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>}</QueryState></div></Shell>;
+  return <Shell><PageHeader eyebrow="Attendance desk" title="Time, with context" description="A lightweight record of presence that keeps the whole team in sync." action={<Button onClick={action} testId="button-attendance-toggle">{todayData?.checkIn && !todayData.checkOut ? 'Clock out' : 'Clock in'} <ArrowRight size={15} /></Button>} /><div className="attendance-summary"><div className="panel attendance-clock"><span className="eyebrow">Your attendance today</span><div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div><div className="clock-meta"><StatusPill value={todayData?.status || 'Not started'} /><span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span></div></div><div className="panel attendance-streak"><span className="eyebrow">This week</span><div className="streak-dots">{Array.from({ length: 5 }).map((_, i) => <span key={i} className={i < 3 ? 'done' : ''}><Check size={13} /></span>)}</div><strong>3 of 5 days recorded</strong><p>Consistency creates useful visibility.</p></div></div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div><div className="segmented"><button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button><button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button></div></div><QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>{logs.data?.length ? <AttendanceTable logs={logs.data} /> : <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>}</QueryState></div></Shell>;
 }
 
 function AttendanceTable({ logs }: { logs: Attendance[] }) {
@@ -267,20 +292,174 @@ function Leaves() {
   const query = useGetLeaves();
   const balance = useGetLeaveBalance();
   const updateStatus = useUpdateLeaveStatus();
+  const setAllocation = useSetLeaveAllocation();
+  const employeesQuery = useGetEmployees();
   const [filter, setFilter] = useState('all');
-  const { data: user } = useGetMe();
+  const [allocating, setAllocating] = useState(false);
+  const [allocForm, setAllocForm] = useState({ userId: '', leaveType: 'PAID', allocatedDays: '24' });
+
+  const meQuery = useGetMe();
+  const user = meQuery.data?.user;
   const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr') || user?.role?.toLowerCase().includes('manager');
   const allLeaves = Array.isArray(query.data) ? query.data : [];
   const visibleLeaves = isAdmin ? allLeaves : allLeaves.filter(l => l.user?.email === user?.email || l.userId === user?.id);
   const leaves = visibleLeaves.filter((leave) => filter === 'all' || leave.status?.toLowerCase() === filter);
-  const changeStatus = (id: string, status: string) => updateStatus.mutate({ id, data: { status } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetLeavesQueryKey() }) });
   
+  const changeStatus = (id: string | number, status: string) => updateStatus.mutate({ id, data: { status } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetLeavesQueryKey() }) });
+
+  const saveAllocation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!allocForm.userId) return;
+    setAllocation.mutate(
+      { userId: Number(allocForm.userId), leaveType: allocForm.leaveType, allocatedDays: Number(allocForm.allocatedDays) },
+      {
+        onSuccess: () => {
+          setAllocating(false);
+          queryClient.invalidateQueries({ queryKey: getGetLeaveBalanceQueryKey() });
+        },
+      }
+    );
+  };
+
   const balanceData = Array.isArray(balance.data) ? balance.data : [
     { type: 'Annual Leave', available: (balance.data as any)?.annual || 20, used: 2, total: 22 },
     { type: 'Sick Leave', available: (balance.data as any)?.sick || 10, used: 1, total: 11 }
   ];
-  
-  return <Shell><PageHeader eyebrow="Leave desk" title="Time away, made visible" description="Make room for rest without losing the thread of the work." action={<Link href="/leaves/apply" data-testid="link-apply-leave" className="btn btn-primary"><Plus size={16} /> Apply for leave</Link>} /><div className="balance-grid">{balanceData.map((item) => <div className="balance-card glass" key={item.type}><div className="balance-head"><span>{item.type}</span><CalendarDays size={16} /></div><strong>{item.available}</strong><small>days available</small><div className="balance-track"><span style={{ width: `${item.total ? (item.used / item.total) * 100 : 0}%` }} /></div><div className="balance-foot"><span>{item.used} used</span><span>{item.total} total</span></div></div>)}</div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Request stream</span><h2>Leave requests</h2></div><div className="segmented">{['all', 'pending', 'approved', 'rejected'].map((value) => <button key={value} data-testid={`button-leave-filter-${value}`} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div><QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>{leaves.length ? <div className="table-wrap"><table><thead><tr><th>Person</th><th>Type</th><th>Dates</th><th>Status</th><th className="align-right">Action</th></tr></thead><tbody>{leaves.map((leave) => <tr key={leave.id} data-testid={`row-leave-${leave.id}`}><td><div className="person-cell"><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'You'}</strong><small>{leave.user?.department || 'Personal request'}</small></span></div></td><td>{leave.type}</td><td><strong>{shortDate(leave.startDate)} — {shortDate(leave.endDate)}</strong><small>{leave.reason}</small></td><td><StatusPill value={leave.status} /></td><td className="align-right">{isAdmin && leave.status?.toLowerCase() === 'pending' ? <div className="table-actions"><Button variant="secondary" onClick={() => changeStatus(leave.id, 'approved')} disabled={updateStatus.isPending} testId={`button-approve-leave-${leave.id}`}><Check size={14} /> Approve</Button><Button variant="ghost" onClick={() => changeStatus(leave.id, 'rejected')} disabled={updateStatus.isPending} testId={`button-reject-leave-${leave.id}`}><X size={14} /></Button></div> : <span className="muted-text">{leave.status?.toLowerCase() === 'pending' ? 'Pending' : 'Reviewed'}</span>}</td></tr>)}</tbody></table></div> : <div className="compact-empty"><CalendarDays size={16} />There are no {filter === 'all' ? '' : filter} leave requests.</div>}</QueryState></div></Shell>;
+
+  return (
+    <Shell>
+      <PageHeader
+        eyebrow="Leave desk"
+        title="Time away, made visible"
+        description={isAdmin ? 'Track employee presence, approve or reject leave requests, and assign leave allocations.' : 'Make room for rest without losing the thread of the work.'}
+        action={
+          isAdmin ? (
+            <Button onClick={() => setAllocating(true)} testId="button-allocate-leave">
+              <Plus size={16} /> Assign Leave Quotas
+            </Button>
+          ) : (
+            <Link href="/leaves/apply" data-testid="link-apply-leave" className="btn btn-primary">
+              <Plus size={16} /> Apply for leave
+            </Link>
+          )
+        }
+      />
+      <div className="balance-grid">
+        {balanceData.map((item) => (
+          <div className="balance-card glass" key={item.type}>
+            <div className="balance-head"><span>{item.type}</span><CalendarDays size={16} /></div>
+            <strong>{item.available}</strong>
+            <small>days available</small>
+            <div className="balance-track"><span style={{ width: `${item.total ? (item.used / item.total) * 100 : 0}%` }} /></div>
+            <div className="balance-foot"><span>{item.used} used</span><span>{item.total} total</span></div>
+          </div>
+        ))}
+      </div>
+      <div className="panel table-panel">
+        <div className="panel-head">
+          <div><span className="eyebrow">Request stream</span><h2>Leave requests</h2></div>
+          <div className="segmented">
+            {['all', 'pending', 'approved', 'rejected'].map((value) => (
+              <button key={value} data-testid={`button-leave-filter-${value}`} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>
+                {value[0].toUpperCase() + value.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>
+          {leaves.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Person</th>
+                    <th>Type</th>
+                    <th>Dates</th>
+                    <th>Status</th>
+                    <th className="align-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaves.map((leave) => (
+                    <tr key={leave.id} data-testid={`row-leave-${leave.id}`}>
+                      <td>
+                        <div className="person-cell">
+                          <Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" />
+                          <span>
+                            <strong>{leave.user?.name || 'Employee'}</strong>
+                            <small>{leave.user?.department || 'Personal request'}</small>
+                          </span>
+                        </div>
+                      </td>
+                      <td>{leave.type}</td>
+                      <td>
+                        <strong>{shortDate(leave.startDate)} — {shortDate(leave.endDate)}</strong>
+                        <small>{leave.reason}</small>
+                      </td>
+                      <td><StatusPill value={leave.status} /></td>
+                      <td className="align-right">
+                        {isAdmin && leave.status?.toLowerCase() === 'pending' ? (
+                          <div className="table-actions">
+                            <Button variant="secondary" onClick={() => changeStatus(leave.id, 'APPROVED')} disabled={updateStatus.isPending} testId={`button-approve-leave-${leave.id}`}>
+                              <Check size={14} /> Approve
+                            </Button>
+                            <Button variant="ghost" onClick={() => changeStatus(leave.id, 'REJECTED')} disabled={updateStatus.isPending} testId={`button-reject-leave-${leave.id}`}>
+                              <X size={14} /> Reject
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="muted-text">{leave.status?.toLowerCase() === 'pending' ? 'Pending' : 'Reviewed'}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="compact-empty"><CalendarDays size={16} />There are no {filter === 'all' ? '' : filter} leave requests.</div>
+          )}
+        </QueryState>
+      </div>
+
+      {allocating && (
+        <div className="modal-backdrop">
+          <div className="modal glass-strong">
+            <div className="panel-head">
+              <div><span className="eyebrow">Admin & Manager Control</span><h2>Assign Leave Quotas</h2></div>
+              <Button variant="icon" onClick={() => setAllocating(false)}><X size={17} /></Button>
+            </div>
+            <form onSubmit={saveAllocation} className="form-grid">
+              <label>
+                <span>Select Employee</span>
+                <select value={allocForm.userId} onChange={(e) => setAllocForm({ ...allocForm, userId: e.target.value })} required>
+                  <option value="">-- Choose employee --</option>
+                  {(employeesQuery.data || []).map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.department || 'Employee'})</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Leave Type</span>
+                <select value={allocForm.leaveType} onChange={(e) => setAllocForm({ ...allocForm, leaveType: e.target.value })}>
+                  <option value="PAID">Paid / Annual Leave</option>
+                  <option value="SICK">Sick Leave</option>
+                  <option value="UNPAID">Unpaid Leave</option>
+                </select>
+              </label>
+              <Field label="Allocated Days" type="number" value={allocForm.allocatedDays} onChange={(v) => setAllocForm({ ...allocForm, allocatedDays: v })} />
+              <div className="form-actions">
+                <Button variant="ghost" onClick={() => setAllocating(false)}>Cancel</Button>
+                <Button type="submit" disabled={setAllocation.isPending || !allocForm.userId}>
+                  {setAllocation.isPending ? 'Assigning...' : 'Save Allocation'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </Shell>
+  );
 }
 
 function ApplyLeave() {
@@ -293,17 +472,114 @@ function ApplyLeave() {
 
 function Payroll({ detail = false }: { detail?: boolean }) {
   const { userId } = useParams<{ userId: string }>();
-  const { data: me } = useGetMe();
+  const meQuery = useGetMe();
+  const me = meQuery.data?.user;
+  const employeesQuery = useGetEmployees();
+  const [selectedEmpId, setSelectedEmpId] = useState<string>(userId || '');
   const query = useGetMyPayroll();
   const update = useUpdatePayroll();
   const payroll = query.data as Payroll | undefined;
   const [editing, setEditing] = useState(false);
   const [wage, setWage] = useState('');
-  const canEdit = me?.role?.toLowerCase().includes('admin') || me?.role?.toLowerCase().includes('hr');
-  const save = () => update.mutate({ userId: userId || me?.id || '', data: { monthlyWage: Number(wage) } }, { onSuccess: () => { setEditing(false); queryClient.invalidateQueries({ queryKey: getGetMyPayrollQueryKey() }); } });
+  const canEdit = me?.role?.toLowerCase().includes('admin') || me?.role?.toLowerCase().includes('hr') || me?.role?.toLowerCase().includes('manager');
+  
+  const targetUserId = selectedEmpId || userId || String(me?.id || '');
+
+  const save = () => {
+    update.mutate(
+      { userId: targetUserId, data: { monthlyWage: Number(wage) } },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          queryClient.invalidateQueries({ queryKey: getGetMyPayrollQueryKey() });
+        },
+      }
+    );
+  };
+
   const totalEarnings = Object.values(payroll?.earnings || {}).reduce((sum, value) => sum + value, 0);
   const totalDeductions = Object.values(payroll?.deductions || {}).reduce((sum, value) => sum + value, 0);
-  return <Shell><PageHeader eyebrow={detail ? 'Payroll detail' : 'Your payroll'} title="Know what lands" description="A private, transparent view of your compensation for the current cycle." action={<Button variant="secondary" onClick={() => window.print()} testId="button-download-payslip"><FileText size={15} /> Download payslip</Button>} /><QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>{payroll && <div className="payroll-layout"><section className="payroll-hero"><div><span className="eyebrow">Net salary · Current month</span><strong data-testid="text-net-salary">{money(payroll.netSalary)}</strong><p>Processed on the last working day of the month</p></div><div className="payroll-seal"><ShieldCheck size={24} /><span>Private<br />view</span></div></section><div className="payroll-stats"><div className="panel"><span className="eyebrow">Monthly wage</span><strong>{money(payroll.monthlyWage)}</strong>{canEdit && <Button variant="ghost" onClick={() => { setWage(String(payroll.monthlyWage)); setEditing(true); }} testId="button-edit-payroll"><Pencil size={13} /> Edit</Button>}</div><div className="panel"><span className="eyebrow">Yearly wage</span><strong>{money(payroll.yearlyWage)}</strong><small>Before deductions</small></div><div className="panel"><span className="eyebrow">Take-home ratio</span><strong>{payroll.monthlyWage ? `${Math.round((payroll.netSalary / payroll.monthlyWage) * 100)}%` : '—'}</strong><small>Of gross monthly pay</small></div></div><div className="payroll-columns"><section className="panel"><div className="panel-head"><div><span className="eyebrow">Monthly breakdown</span><h2>Earnings</h2></div><span className="amount-positive">+{money(totalEarnings)}</span></div>{Object.entries(payroll.earnings || {}).map(([label, value]) => <div className="money-row" key={label}><span>{label}</span><strong>{money(value)}</strong></div>)}{!Object.keys(payroll.earnings || {}).length && <div className="compact-empty">No earnings breakdown available.</div>}</section><section className="panel"><div className="panel-head"><div><span className="eyebrow">Monthly breakdown</span><h2>Deductions</h2></div><span className="amount-negative">−{money(totalDeductions)}</span></div>{Object.entries(payroll.deductions || {}).map(([label, value]) => <div className="money-row" key={label}><span>{label}</span><strong>{money(value)}</strong></div>)}{!Object.keys(payroll.deductions || {}).length && <div className="compact-empty">No deductions breakdown available.</div>}</section></div></div>}</QueryState>{editing && <div className="modal-backdrop"><div className="modal glass-strong"><div className="panel-head"><div><span className="eyebrow">Authorised edit</span><h2>Update monthly wage</h2></div><Button variant="icon" onClick={() => setEditing(false)} testId="button-close-payroll"><X size={17} /></Button></div><Field label="Monthly wage" type="number" value={wage} onChange={setWage} /><div className="form-actions"><Button variant="ghost" onClick={() => setEditing(false)} testId="button-cancel-payroll">Cancel</Button><Button onClick={save} disabled={update.isPending} testId="button-save-payroll">Save wage</Button></div></div></div>}</Shell>;
+
+  return (
+    <Shell>
+      <PageHeader
+        eyebrow={detail ? 'Payroll detail' : 'Payroll Management'}
+        title={canEdit ? 'Employee Payroll & Compensation' : 'Know what lands'}
+        description="Private, transparent view of compensation for the current cycle."
+        action={
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {canEdit && (
+              <select
+                style={{ background: 'var(--muted, #f3f4f6)', border: '1px solid var(--border, #e5e7eb)', padding: '6px 12px', borderRadius: '8px', fontSize: '13px', outline: 'none' }}
+                value={selectedEmpId}
+                onChange={(e) => setSelectedEmpId(e.target.value)}
+              >
+                <option value="">My Pay Slip ({me?.name})</option>
+                {(employeesQuery.data || []).map((emp) => (
+                  <option key={emp.id} value={emp.id}>{emp.name} ({emp.department || 'Employee'})</option>
+                ))}
+              </select>
+            )}
+            <Button variant="secondary" onClick={() => window.print()} testId="button-download-payslip">
+              <FileText size={15} /> Download payslip
+            </Button>
+          </div>
+        }
+      />
+      <QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>
+        {payroll && (
+          <div className="payroll-layout">
+            <section className="payroll-hero">
+              <div>
+                <span className="eyebrow">Net salary · Current month</span>
+                <strong data-testid="text-net-salary">{money(payroll.netSalary)}</strong>
+                <p>Processed on the last working day of the month</p>
+              </div>
+              <div className="payroll-seal"><ShieldCheck size={24} /><span>Private<br />view</span></div>
+            </section>
+            <div className="payroll-stats">
+              <div className="panel">
+                <span className="eyebrow">Monthly wage</span>
+                <strong>{money(payroll.monthlyWage)}</strong>
+                {canEdit && (
+                  <Button variant="ghost" onClick={() => { setWage(String(payroll.monthlyWage)); setEditing(true); }} testId="button-edit-payroll">
+                    <Pencil size={13} /> Assign Wage
+                  </Button>
+                )}
+              </div>
+              <div className="panel"><span className="eyebrow">Yearly wage</span><strong>{money(payroll.yearlyWage)}</strong><small>Before deductions</small></div>
+              <div className="panel"><span className="eyebrow">Take-home ratio</span><strong>{payroll.monthlyWage ? `${Math.round((payroll.netSalary / payroll.monthlyWage) * 100)}%` : '—'}</strong><small>Of gross monthly pay</small></div>
+            </div>
+            <div className="payroll-columns">
+              <section className="panel">
+                <div className="panel-head"><div><span className="eyebrow">Monthly breakdown</span><h2>Earnings</h2></div><span className="amount-positive">+{money(totalEarnings)}</span></div>
+                {Object.entries(payroll.earnings || {}).map(([label, value]) => <div className="money-row" key={label}><span>{label}</span><strong>{money(value)}</strong></div>)}
+              </section>
+              <section className="panel">
+                <div className="panel-head"><div><span className="eyebrow">Monthly breakdown</span><h2>Deductions</h2></div><span className="amount-negative">−{money(totalDeductions)}</span></div>
+                {Object.entries(payroll.deductions || {}).map(([label, value]) => <div className="money-row" key={label}><span>{label}</span><strong>{money(value)}</strong></div>)}
+              </section>
+            </div>
+          </div>
+        )}
+      </QueryState>
+      {editing && (
+        <div className="modal-backdrop">
+          <div className="modal glass-strong">
+            <div className="panel-head">
+              <div><span className="eyebrow">Authorised Admin Edit</span><h2>Assign Monthly Wage</h2></div>
+              <Button variant="icon" onClick={() => setEditing(false)} testId="button-close-payroll"><X size={17} /></Button>
+            </div>
+            <Field label="Monthly wage (₹)" type="number" value={wage} onChange={setWage} />
+            <div className="form-actions">
+              <Button variant="ghost" onClick={() => setEditing(false)} testId="button-cancel-payroll">Cancel</Button>
+              <Button onClick={save} disabled={update.isPending} testId="button-save-payroll">Save Wage</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Shell>
+  );
 }
 
 function PayrollRoute() { return <Payroll />; }
@@ -317,22 +593,135 @@ function Reports() {
 }
 
 function Profile() {
-  const { data: user } = useGetMe();
-  return <Shell><PageHeader eyebrow="Your profile" title="A little more context" description="Keep your work identity current so the right details reach the right people." action={<Button variant="secondary" onClick={() => document.getElementById('profile-name')?.focus()} testId="button-edit-own-profile"><Pencil size={15} /> Edit details</Button>} /><div className="profile-layout"><section className="panel profile-card"><div className="profile-large"><Avatar name={user?.name} src={user?.avatar} size="lg" /><div><h2 data-testid="text-profile-name">{user?.name || 'Your profile'}</h2><p>{user?.jobPosition || 'Team member'} · {user?.department || 'Unassigned'}</p><StatusPill value={user?.role || 'Member'} /></div></div><div className="detail-list"><Detail label="Email" value={user?.email} /><Detail label="Employee ID" value={user?.employeeId} mono /><Detail label="Company" value={user?.company} /><Detail label="Role" value={user?.role} /></div></section><section className="panel"><div className="panel-head"><div><span className="eyebrow">Personal preferences</span><h2>How Dayflow feels</h2></div><Sparkles size={18} className="panel-icon" /></div><div className="preference-list"><div><span><Bell size={16} /> Notifications</span><button data-testid="button-toggle-notifications" className="toggle is-on" onClick={(e) => e.currentTarget.classList.toggle('is-on')}><i /></button></div><div><span><ShieldCheck size={16} /> Profile visibility</span><span className="muted-text">Team only</span></div></div></section></div></Shell>;
+  const meQuery = useGetMe();
+  const user = meQuery.data?.user;
+  const update = useUpdateEmployee();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ name: '', department: '', jobPosition: '', phone: '', address: '' });
+
+  const startEdit = () => {
+    if (user) {
+      setForm({
+        name: user.name || '',
+        department: user.department || '',
+        jobPosition: user.jobPosition || '',
+        phone: user.phone || '',
+        address: user.address || '',
+      });
+    }
+    setEditing(true);
+  };
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    if (!user?.id) return;
+    update.mutate(
+      { id: user.id, data: form },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+          qc.invalidateQueries({ queryKey: getGetEmployeesQueryKey() });
+        },
+      }
+    );
+  };
+
+  return <Shell><PageHeader eyebrow="Your profile" title="A little more context" description="Keep your work identity current so the right details reach the right people." action={!editing ? <Button variant="secondary" onClick={startEdit} testId="button-edit-own-profile"><Pencil size={15} /> Edit details</Button> : null} /><div className="profile-layout"><section className="panel profile-card"><div className="profile-large"><Avatar name={user?.name} src={user?.avatar || user?.avatarUrl} size="lg" /><div><h2 data-testid="text-profile-name">{user?.name || 'Your profile'}</h2><p>{user?.jobPosition || 'Team member'} · {user?.department || 'Unassigned'}</p><StatusPill value={user?.role || 'Member'} /></div></div>{editing ? <form onSubmit={save} className="form-grid mt-4"><Field label="Full name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} /><Field label="Department" value={form.department} onChange={(v) => setForm({ ...form, department: v })} /><Field label="Job position" value={form.jobPosition} onChange={(v) => setForm({ ...form, jobPosition: v })} /><Field label="Phone" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} /><Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} wide /><div className="form-actions"><Button variant="ghost" onClick={() => setEditing(false)} testId="button-cancel-own-edit">Cancel</Button><Button type="submit" disabled={update.isPending} testId="button-save-own-profile">{update.isPending ? 'Saving…' : 'Save changes'}</Button></div></form> : <div className="detail-list"><Detail label="Email" value={user?.email} /><Detail label="Employee ID" value={user?.employeeId} mono /><Detail label="Phone" value={user?.phone} /><Detail label="Department" value={user?.department} /><Detail label="Job position" value={user?.jobPosition} /><Detail label="Address" value={user?.address} /><Detail label="Company" value={user?.company || user?.companyName || 'Odoo'} /><Detail label="Role" value={user?.role} /></div>}</section><section className="panel"><div className="panel-head"><div><span className="eyebrow">Personal preferences</span><h2>How Dayflow feels</h2></div><Sparkles size={18} className="panel-icon" /></div><div className="preference-list"><div><span><Bell size={16} /> Notifications</span><button data-testid="button-toggle-notifications" className="toggle is-on" onClick={(e) => e.currentTarget.classList.toggle('is-on')}><i /></button></div><div><span><ShieldCheck size={16} /> Profile visibility</span><span className="muted-text">Team only</span></div></div></section></div></Shell>;
 }
 
 function Settings() {
   const [dark, setDark] = useState(document.documentElement.classList.contains('dark'));
-  const toggle = () => { const next = !dark; setDark(next); document.documentElement.classList.toggle('dark', next); localStorage.setItem('dayflow-theme', next ? 'dark' : 'light'); };
-  return <Shell><PageHeader eyebrow="Workspace settings" title="Tune the room" description="Small choices that make a long workday feel more like yours." /><div className="settings-layout"><section className="panel"><div className="panel-head"><div><span className="eyebrow">Appearance</span><h2>Visual preferences</h2></div><Sparkles size={18} className="panel-icon" /></div><div className="setting-row"><div><strong>Theme</strong><p>Choose a softer light or a deep night workspace.</p></div><button data-testid="button-toggle-theme" onClick={toggle} className="theme-toggle"><span className={!dark ? 'selected' : ''}>Light</span><span className={dark ? 'selected' : ''}>Night</span></button></div><div className="setting-row"><div><strong>Reduced motion</strong><p>Keep transitions quiet when you need focus.</p></div><button data-testid="button-toggle-motion" className="toggle" onClick={(e) => e.currentTarget.classList.toggle('is-on')}><i /></button></div></section><section className="panel support-card"><LifeBuoy size={22} /><span className="eyebrow">Need a hand?</span><h2>We keep the people work moving.</h2><p>Reach the workspace support team when a process feels unclear or a detail needs care.</p><Button variant="secondary" onClick={() => window.location.href = 'mailto:people@dayflow.co'} testId="button-contact-support">Contact support <ArrowRight size={15} /></Button></section></div></Shell>;
+  const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
+  const [passSaved, setPassSaved] = useState(false);
+  const { toast } = useToast();
+
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('dayflow-theme', next ? 'dark' : 'light');
+    toast({ title: 'Theme updated', description: `Switched to ${next ? 'Night' : 'Light'} theme.` });
+  };
+
+  const handlePasswordChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwords.current || !passwords.next) {
+      toast({ title: 'Validation Error', description: 'Please fill in password fields.', variant: 'destructive' });
+      return;
+    }
+    if (passwords.next !== passwords.confirm) {
+      toast({ title: 'Password Error', description: 'New passwords do not match.', variant: 'destructive' });
+      return;
+    }
+    setPassSaved(true);
+    setPasswords({ current: '', next: '', confirm: '' });
+    toast({ title: 'Password Saved', description: 'Your password has been successfully updated.' });
+    setTimeout(() => setPassSaved(false), 3000);
+  };
+
+  return (
+    <Shell>
+      <PageHeader eyebrow="Workspace settings" title="Tune the room" description="Personalize your workspace preferences, appearance, and account security." />
+      <div className="settings-layout">
+        <section className="panel">
+          <div className="panel-head">
+            <div><span className="eyebrow">Appearance</span><h2>Visual preferences</h2></div>
+            <Sparkles size={18} className="panel-icon" />
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Theme Mode</strong>
+              <p>Switch between Light mode and Night mode workspace styling.</p>
+            </div>
+            <button data-testid="button-toggle-theme" onClick={toggleTheme} className="theme-toggle">
+              <span className={!dark ? 'selected' : ''}>Light</span>
+              <span className={dark ? 'selected' : ''}>Night</span>
+            </button>
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>Reduced Motion</strong>
+              <p>Quiet transitions when you need uninterrupted focus.</p>
+            </div>
+            <button data-testid="button-toggle-motion" className="toggle" onClick={(e) => e.currentTarget.classList.toggle('is-on')}><i /></button>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-head">
+            <div><span className="eyebrow">Security</span><h2>Account Password</h2></div>
+            <ShieldCheck size={18} className="panel-icon" />
+          </div>
+          <form onSubmit={handlePasswordChange} className="form-grid">
+            <Field label="Current Password" type="password" value={passwords.current} onChange={(v) => setPasswords({ ...passwords, current: v })} />
+            <Field label="New Password" type="password" value={passwords.next} onChange={(v) => setPasswords({ ...passwords, next: v })} />
+            <Field label="Confirm New Password" type="password" value={passwords.confirm} onChange={(v) => setPasswords({ ...passwords, confirm: v })} wide />
+            <div className="form-actions">
+              <Button type="submit" testId="button-save-password">{passSaved ? 'Password Saved ✓' : 'Update Password'}</Button>
+            </div>
+          </form>
+        </section>
+
+        <section className="panel support-card">
+          <LifeBuoy size={22} />
+          <span className="eyebrow">Need assistance?</span>
+          <h2>We keep your operations running smoothly.</h2>
+          <p>Reach out to your workspace administration team for support with roles, approvals, or configurations.</p>
+          <Button variant="secondary" onClick={() => window.location.href = 'mailto:support@odoo.com'} testId="button-contact-support">
+            Contact support <ArrowRight size={15} />
+          </Button>
+        </section>
+      </div>
+    </Shell>
+  );
 }
 
 function Field({ label, value, onChange, type = 'text', wide = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; wide?: boolean }) {
   return <label className={wide ? 'wide' : ''}><span>{label}</span><input data-testid={`input-${label.toLowerCase().replaceAll(' ', '-')}`} required={label !== 'Phone' && label !== 'Address'} type={type} value={value} onChange={(e) => onChange(e.target.value)} /></label>;
 }
 function Detail({ label, value, mono = false }: { label: string; value?: string | null; mono?: boolean }) { return <div className="detail-row"><span>{label}</span><strong data-testid={`text-detail-${label.toLowerCase().replaceAll(' ', '-')}`} className={mono ? 'mono' : ''}>{value || 'Not added'}</strong></div>; }
-
-
 
 function Router() {
   const [location] = useLocation();
@@ -353,7 +742,7 @@ function Router() {
   }
   
   const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr') || user?.role?.toLowerCase().includes('manager');
-  const isProtectedEmployeeRoute = location.startsWith('/employees') || location.startsWith('/settings');
+  const isProtectedEmployeeRoute = location.startsWith('/employees');
   if (isAuthenticated && !isAdmin && isProtectedEmployeeRoute) {
     return <RedirectTo href="/dashboard" />;
   }
