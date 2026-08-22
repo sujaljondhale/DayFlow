@@ -22,6 +22,9 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import NotFound from '@/pages/not-found';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import Login from '@/pages/auth/Login';
+import Signup from '@/pages/auth/Signup';
 
 const queryClient = new QueryClient();
 
@@ -258,100 +261,32 @@ function Field({ label, value, onChange, type = 'text', wide = false }: { label:
 }
 function Detail({ label, value, mono = false }: { label: string; value?: string | null; mono?: boolean }) { return <div className="detail-row"><span>{label}</span><strong data-testid={`text-detail-${label.toLowerCase().replaceAll(' ', '-')}`} className={mono ? 'mono' : ''}>{value || 'Not added'}</strong></div>; }
 
-function AuthLayout({ children }: { children: ReactNode }) {
-  return <div className="auth-wrapper"><div className="auth-container"><aside className="auth-aside"><div className="auth-aside-header"><Link href="/" className="brand-mark">AMU</Link><Link href="/" className="back-to-website">Back to website &rarr;</Link></div><div className="auth-aside-content"><h2>Capturing Moments,<br />Creating Memories</h2><div className="slider-dots"><span className="active" /><span /><span /></div></div></aside><main className="auth-main">{children}</main></div></div>;
-}
 
-function Login() {
-  const [, setLocation] = useLocation();
-  const login = useLogin();
-  const [form, setForm] = useState({ loginId: '', password: '' });
-  const submit = (e: FormEvent) => { e.preventDefault(); login.mutate({ data: form }, { onSuccess: () => { queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }); setLocation('/dashboard'); } }); };
-  return <AuthLayout>
-    <h1>Sign in</h1>
-    <div className="auth-switch">Don't have an account? <Link href="/signup">Sign up</Link></div>
-    <form className="auth-form" onSubmit={submit}>
-      <div className="auth-field-wrap">
-        <input type="text" placeholder="Email or employee ID" value={form.loginId} onChange={(e) => setForm({ ...form, loginId: e.target.value })} required />
-      </div>
-      <div className="auth-field-wrap">
-        <input type="password" placeholder="Enter your password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
-        <Eye className="password-icon" size={16} />
-      </div>
-      <label className="auth-check-label"><input type="checkbox" /> Keep me signed in</label>
-      <button type="submit" className="full-btn" disabled={login.isPending}>{login.isPending ? 'Signing in...' : 'Sign in'}</button>
-      {login.error && <p className="form-error">{friendlyError(login.error)}</p>}
-    </form>
-    <div className="auth-divider">Or sign in with</div>
-    <div className="social-logins">
-      <button type="button" className="social-btn">
-        <img src="https://www.svgrepo.com/show/475656/google-color.svg" width={16} alt="Google" /> Google
-      </button>
-      <button type="button" className="social-btn">
-        <img src="https://www.svgrepo.com/show/511330/apple-173.svg" width={16} alt="Apple" style={{filter: 'invert(1)'}} /> Apple
-      </button>
-    </div>
-  </AuthLayout>;
-}
-
-function Signup() {
-  const [, setLocation] = useLocation();
-  const signup = useSignup();
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Employee', companyName: '', department: '', jobPosition: '', phone: '', address: '' });
-  const update = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const submit = (e: FormEvent) => { e.preventDefault(); signup.mutate({ data: form }, { onSuccess: () => setLocation('/dashboard') }); };
-  return <AuthLayout>
-    <h1>Create an account</h1>
-    <div className="auth-switch">Already have an account? <Link href="/login">Log in</Link></div>
-    <form className="auth-form" onSubmit={submit}>
-      <div className="form-row">
-        <div className="auth-field-wrap">
-          <input type="text" placeholder="Full name" value={form.name} onChange={(e) => update('name', e.target.value)} required />
-        </div>
-        <div className="auth-field-wrap">
-          <input type="text" placeholder="Company" value={form.companyName} onChange={(e) => update('companyName', e.target.value)} required />
-        </div>
-      </div>
-      <div className="auth-field-wrap">
-        <input type="email" placeholder="Email" value={form.email} onChange={(e) => update('email', e.target.value)} required />
-      </div>
-      <div className="auth-field-wrap">
-        <input type="password" placeholder="Enter your password" value={form.password} onChange={(e) => update('password', e.target.value)} required />
-        <Eye className="password-icon" size={16} />
-      </div>
-      <div className="form-row">
-        <div className="auth-field-wrap">
-          <input type="text" placeholder="Department" value={form.department} onChange={(e) => update('department', e.target.value)} required />
-        </div>
-        <div className="auth-field-wrap">
-          <input type="text" placeholder="Job position" value={form.jobPosition} onChange={(e) => update('jobPosition', e.target.value)} required />
-        </div>
-      </div>
-      <label className="auth-check-label"><input type="checkbox" required /> I agree to the Terms & Conditions</label>
-      <button type="submit" className="full-btn" disabled={signup.isPending}>{signup.isPending ? 'Creating account...' : 'Create account'}</button>
-      {signup.error && <p className="form-error">{friendlyError(signup.error)}</p>}
-    </form>
-    <div className="auth-divider">Or register with</div>
-    <div className="social-logins">
-      <button type="button" className="social-btn">
-        <img src="https://www.svgrepo.com/show/475656/google-color.svg" width={16} alt="Google" /> Google
-      </button>
-      <button type="button" className="social-btn">
-        <img src="https://www.svgrepo.com/show/511330/apple-173.svg" width={16} alt="Apple" style={{filter: 'invert(1)'}} /> Apple
-      </button>
-    </div>
-  </AuthLayout>;
-}
 
 function Router() {
   const [location] = useLocation();
-  const isAuth = location === '/login' || location === '/signup';
-  return <ErrorBoundary resetKey={location}>{isAuth ? <Switch><Route path="/login" component={Login} /><Route path="/signup" component={Signup} /></Switch> : <Switch><Route path="/" component={() => <RedirectTo href="/dashboard" />} /><Route path="/dashboard" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/employees/:id" component={EmployeeProfile} /><Route path="/attendance" component={Attendance} /><Route path="/leaves/apply" component={ApplyLeave} /><Route path="/leaves" component={Leaves} /><Route path="/payroll/:userId" component={PayrollDetailRoute} /><Route path="/payroll" component={PayrollRoute} /><Route path="/reports" component={Reports} /><Route path="/profile" component={Profile} /><Route path="/settings" component={Settings} /><Route component={NotFound} /></Switch>}</ErrorBoundary>;
+  const { isAuthenticated, isLoading } = useAuth();
+  
+  if (isLoading) {
+    return <div className="flex h-screen items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+  }
+
+  const isAuthRoute = location === '/login' || location === '/signup';
+
+  if (!isAuthenticated && !isAuthRoute) {
+    return <RedirectTo href="/login" />;
+  }
+
+  if (isAuthenticated && isAuthRoute) {
+    return <RedirectTo href="/dashboard" />;
+  }
+
+  return <ErrorBoundary resetKey={location}>{isAuthRoute ? <Switch><Route path="/login" component={Login} /><Route path="/signup" component={Signup} /></Switch> : <Switch><Route path="/" component={() => <RedirectTo href="/dashboard" />} /><Route path="/dashboard" component={Dashboard} /><Route path="/employees" component={Employees} /><Route path="/employees/:id" component={EmployeeProfile} /><Route path="/attendance" component={Attendance} /><Route path="/leaves/apply" component={ApplyLeave} /><Route path="/leaves" component={Leaves} /><Route path="/payroll/:userId" component={PayrollDetailRoute} /><Route path="/payroll" component={PayrollRoute} /><Route path="/reports" component={Reports} /><Route path="/profile" component={Profile} /><Route path="/settings" component={Settings} /><Route component={NotFound} /></Switch>}</ErrorBoundary>;
 }
 function RedirectTo({ href }: { href: string }) { const [, setLocation] = useLocation(); useEffect(() => setLocation(href), [href, setLocation]); return null; }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><AuthProvider><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, '') || ''}><Router /></WouterRouter><Toaster /></TooltipProvider></AuthProvider></QueryClientProvider>;
 }
 
 export default App;

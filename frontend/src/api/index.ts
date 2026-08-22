@@ -25,11 +25,33 @@ export const useGetEmployee = () => ({ data: null, isLoading: false });
 export const useGetEmployees = () => ({ data: [] as Employee[], isLoading: false });
 export const useGetLeaveBalance = () => ({ data: { annual: 20, sick: 10 }, isLoading: false });
 export const useGetLeaves = () => ({ data: [] as Leave[], isLoading: false });
-export const useGetMe = () => ({ data: null, isLoading: false });
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { authApi, type LoginPayload, type SignupPayload } from './auth.api';
+
+export const useGetMe = () => {
+  return useQuery({
+    queryKey: getGetMeQueryKey(),
+    queryFn: () => authApi.me(),
+    retry: false, // Don't retry on 401
+    staleTime: Infinity, // Keep session alive
+  });
+};
+
 export const useGetMyPayroll = () => ({ data: [] as Payroll[], isLoading: false });
 export const useHealthCheck = () => ({ data: { status: 'ok' }, isLoading: false });
-export const useLogin = () => ({ mutateAsync: async () => ({}) });
-export const useSignup = () => ({ mutateAsync: async () => ({}) });
+
+export const useLogin = () => {
+  return useMutation({
+    mutationFn: (data: LoginPayload) => authApi.login(data),
+  });
+};
+
+export const useSignup = () => {
+  return useMutation({
+    mutationFn: (data: SignupPayload) => authApi.signup(data),
+  });
+};
+
 export const useUpdateEmployee = () => ({ mutateAsync: async () => ({}) });
 export const useUpdateLeaveStatus = () => ({ mutateAsync: async () => ({}) });
 export const useUpdatePayroll = () => ({ mutateAsync: async () => ({}) });
