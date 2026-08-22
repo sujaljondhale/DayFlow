@@ -29,14 +29,14 @@ import Signup from '@/pages/auth/Signup';
 const queryClient = new QueryClient();
 
 const getNavItems = (role?: string): { label: string; href: string; icon: LucideIcon; section: string }[] => {
-  const isAdmin = role?.toLowerCase().includes('admin') || role?.toLowerCase().includes('hr');
+  const isAdmin = role?.toLowerCase().includes('admin') || role?.toLowerCase().includes('hr') || role?.toLowerCase().includes('manager');
   return [
     { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, section: 'Workspace' },
     isAdmin ? { label: 'People', href: '/employees', icon: Users, section: 'Workspace' } : null,
     { label: 'Attendance', href: '/attendance', icon: Clock3, section: 'Workspace' },
     { label: 'Leave desk', href: '/leaves', icon: CalendarDays, section: 'Workspace' },
     { label: 'Payroll', href: '/payroll', icon: WalletCards, section: 'Workspace' },
-    isAdmin ? { label: 'Reports', href: '/reports', icon: BarChart3, section: 'Insights' } : null,
+    { label: 'Reports', href: '/reports', icon: BarChart3, section: 'Insights' },
   ].filter(Boolean) as { label: string; href: string; icon: LucideIcon; section: string }[];
 };
 
@@ -114,7 +114,7 @@ function Sidebar({ user, onClose, pendingLeavesCount = 0 }: { user?: User; onClo
     </nav>
     <div className="sidebar-bottom">
       <Link href="/settings" data-testid="link-settings" className="nav-link"><Settings2 size={17} /><span>Settings</span></Link>
-      <div className="sidebar-user"><Avatar name={user?.name} src={user?.avatar} size="sm" /><div><strong>{user?.name || 'Your account'}</strong><small>{user?.role || 'Member'}</small></div><MoreHorizontal size={16} /></div>
+      <Link href="/profile" className="sidebar-user" style={{ textDecoration: 'none', display: 'flex', outline: 'none' }}><Avatar name={user?.name} src={user?.avatar} size="sm" /><div><strong>{user?.name || 'Your account'}</strong><small>{user?.role || 'Member'}</small></div><MoreHorizontal size={16} /></Link>
     </div>
   </aside>;
 }
@@ -269,12 +269,12 @@ function Leaves() {
   const updateStatus = useUpdateLeaveStatus();
   const [filter, setFilter] = useState('all');
   const { data: user } = useGetMe();
-  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr');
-  const allLeaves = query.data || [];
+  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr') || user?.role?.toLowerCase().includes('manager');
+  const allLeaves = Array.isArray(query.data) ? query.data : [];
   const visibleLeaves = isAdmin ? allLeaves : allLeaves.filter(l => l.user?.email === user?.email || l.userId === user?.id);
   const leaves = visibleLeaves.filter((leave) => filter === 'all' || leave.status?.toLowerCase() === filter);
   const changeStatus = (id: string, status: string) => updateStatus.mutate({ id, data: { status } }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetLeavesQueryKey() }) });
-  return <Shell><PageHeader eyebrow="Leave desk" title="Time away, made visible" description="Make room for rest without losing the thread of the work." action={<Link href="/leaves/apply" data-testid="link-apply-leave" className="btn btn-primary"><Plus size={16} /> Apply for leave</Link>} /><div className="balance-grid">{(balance.data || []).map((item) => <div className="balance-card glass" key={item.type}><div className="balance-head"><span>{item.type}</span><CalendarDays size={16} /></div><strong>{item.available}</strong><small>days available</small><div className="balance-track"><span style={{ width: `${item.total ? (item.used / item.total) * 100 : 0}%` }} /></div><div className="balance-foot"><span>{item.used} used</span><span>{item.total} total</span></div></div>)}</div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Request stream</span><h2>Leave requests</h2></div><div className="segmented">{['all', 'pending', 'approved', 'rejected'].map((value) => <button key={value} data-testid={`button-leave-filter-${value}`} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div><QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>{leaves.length ? <div className="table-wrap"><table><thead><tr><th>Person</th><th>Type</th><th>Dates</th><th>Status</th><th className="align-right">Action</th></tr></thead><tbody>{leaves.map((leave) => <tr key={leave.id} data-testid={`row-leave-${leave.id}`}><td><div className="person-cell"><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'You'}</strong><small>{leave.user?.department || 'Personal request'}</small></span></div></td><td>{leave.type}</td><td><strong>{shortDate(leave.startDate)} — {shortDate(leave.endDate)}</strong><small>{leave.reason}</small></td><td><StatusPill value={leave.status} /></td><td className="align-right">{leave.status?.toLowerCase() === 'pending' ? <div className="table-actions"><Button variant="secondary" onClick={() => changeStatus(leave.id, 'approved')} disabled={updateStatus.isPending} testId={`button-approve-leave-${leave.id}`}><Check size={14} /> Approve</Button><Button variant="ghost" onClick={() => changeStatus(leave.id, 'rejected')} disabled={updateStatus.isPending} testId={`button-reject-leave-${leave.id}`}><X size={14} /></Button></div> : <span className="muted-text">Reviewed</span>}</td></tr>)}</tbody></table></div> : <div className="compact-empty"><CalendarDays size={16} />There are no {filter === 'all' ? '' : filter} leave requests.</div>}</QueryState></div></Shell>;
+  return <Shell><PageHeader eyebrow="Leave desk" title="Time away, made visible" description="Make room for rest without losing the thread of the work." action={<Link href="/leaves/apply" data-testid="link-apply-leave" className="btn btn-primary"><Plus size={16} /> Apply for leave</Link>} /><div className="balance-grid">{(balance.data || []).map((item) => <div className="balance-card glass" key={item.type}><div className="balance-head"><span>{item.type}</span><CalendarDays size={16} /></div><strong>{item.available}</strong><small>days available</small><div className="balance-track"><span style={{ width: `${item.total ? (item.used / item.total) * 100 : 0}%` }} /></div><div className="balance-foot"><span>{item.used} used</span><span>{item.total} total</span></div></div>)}</div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Request stream</span><h2>Leave requests</h2></div><div className="segmented">{['all', 'pending', 'approved', 'rejected'].map((value) => <button key={value} data-testid={`button-leave-filter-${value}`} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value[0].toUpperCase() + value.slice(1)}</button>)}</div></div><QueryState loading={query.isLoading} error={query.error} onRetry={() => query.refetch()}>{leaves.length ? <div className="table-wrap"><table><thead><tr><th>Person</th><th>Type</th><th>Dates</th><th>Status</th><th className="align-right">Action</th></tr></thead><tbody>{leaves.map((leave) => <tr key={leave.id} data-testid={`row-leave-${leave.id}`}><td><div className="person-cell"><Avatar name={leave.user?.name} src={leave.user?.avatar} size="sm" /><span><strong>{leave.user?.name || 'You'}</strong><small>{leave.user?.department || 'Personal request'}</small></span></div></td><td>{leave.type}</td><td><strong>{shortDate(leave.startDate)} — {shortDate(leave.endDate)}</strong><small>{leave.reason}</small></td><td><StatusPill value={leave.status} /></td><td className="align-right">{isAdmin && leave.status?.toLowerCase() === 'pending' ? <div className="table-actions"><Button variant="secondary" onClick={() => changeStatus(leave.id, 'approved')} disabled={updateStatus.isPending} testId={`button-approve-leave-${leave.id}`}><Check size={14} /> Approve</Button><Button variant="ghost" onClick={() => changeStatus(leave.id, 'rejected')} disabled={updateStatus.isPending} testId={`button-reject-leave-${leave.id}`}><X size={14} /></Button></div> : <span className="muted-text">{leave.status?.toLowerCase() === 'pending' ? 'Pending' : 'Reviewed'}</span>}</td></tr>)}</tbody></table></div> : <div className="compact-empty"><CalendarDays size={16} />There are no {filter === 'all' ? '' : filter} leave requests.</div>}</QueryState></div></Shell>;
 }
 
 function ApplyLeave() {
@@ -346,8 +346,8 @@ function Router() {
     return <RedirectTo href="/dashboard" />;
   }
   
-  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr');
-  const isProtectedEmployeeRoute = location.startsWith('/employees') || location.startsWith('/reports') || location.startsWith('/settings');
+  const isAdmin = user?.role?.toLowerCase().includes('admin') || user?.role?.toLowerCase().includes('hr') || user?.role?.toLowerCase().includes('manager');
+  const isProtectedEmployeeRoute = location.startsWith('/employees') || location.startsWith('/settings');
   if (isAuthenticated && !isAdmin && isProtectedEmployeeRoute) {
     return <RedirectTo href="/dashboard" />;
   }
