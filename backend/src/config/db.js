@@ -131,6 +131,7 @@ async function seedDemoData() {
       sarah = { id: res.rows?.[0]?.id || 3 };
     }
 
+    const adminId = admin.id;
     const johnId = john.id;
     const sarahId = sarah.id;
 
@@ -164,27 +165,50 @@ async function seedDemoData() {
       `, [sarahId]);
     }
 
-    // Dynamic past 4 days relative to today
+    // Dynamic past 6 days relative to today
     const now = new Date();
-    const d1 = new Date(now.getTime() - 86400000 * 1).toISOString().split('T')[0];
-    const d2 = new Date(now.getTime() - 86400000 * 2).toISOString().split('T')[0];
-    const d3 = new Date(now.getTime() - 86400000 * 3).toISOString().split('T')[0];
-    const d4 = new Date(now.getTime() - 86400000 * 4).toISOString().split('T')[0];
+    const pastDates = [1, 2, 3, 4, 5, 6].map(offset => {
+      const d = new Date(now.getTime() - 86400000 * offset);
+      return d.toISOString().split('T')[0];
+    });
 
-    // Seed Attendance logs for john if missing
-    const johnAtt = await getAsync(`SELECT COUNT(*) as count FROM attendance WHERE user_id = $1`, [johnId]);
-    if (parseInt(johnAtt?.count || johnAtt?.['COUNT(*)'] || 0, 10) === 0) {
-      await queryAsync(`
-        INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
-        VALUES 
-          ($1, $2, '09:05:00', '17:35:00', 8.50, 'PRESENT'),
-          ($1, $3, '09:00:00', '17:30:00', 8.50, 'PRESENT'),
-          ($1, $4, '09:12:00', '17:45:00', 8.55, 'PRESENT'),
-          ($1, $5, '09:00:00', '17:30:00', 8.50, 'PRESENT')
-      `, [johnId, d4, d3, d2, d1]);
+    // Ensure John Doe has attendance records for all past days
+    for (let i = 0; i < pastDates.length; i++) {
+      const dateStr = pastDates[i];
+      const existing = await getAsync(`SELECT id FROM attendance WHERE user_id = $1 AND date::text = $2`, [johnId, dateStr]);
+      if (!existing) {
+        await queryAsync(`
+          INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
+          VALUES ($1, $2, '09:00:00', '17:30:00', 8.50, 'PRESENT')
+        `, [johnId, dateStr]);
+      }
     }
 
-    // Seed Leaves for john if missing
+    // Ensure Admin has attendance records for past days
+    for (let i = 0; i < pastDates.length; i++) {
+      const dateStr = pastDates[i];
+      const existing = await getAsync(`SELECT id FROM attendance WHERE user_id = $1 AND date::text = $2`, [adminId, dateStr]);
+      if (!existing) {
+        await queryAsync(`
+          INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
+          VALUES ($1, $2, '08:45:00', '17:15:00', 8.50, 'PRESENT')
+        `, [adminId, dateStr]);
+      }
+    }
+
+    // Ensure Sarah has attendance records for some past days
+    for (let i = 0; i < 3; i++) {
+      const dateStr = pastDates[i];
+      const existing = await getAsync(`SELECT id FROM attendance WHERE user_id = $1 AND date::text = $2`, [sarahId, dateStr]);
+      if (!existing) {
+        await queryAsync(`
+          INSERT INTO attendance (user_id, date, check_in, check_out, work_hours, status)
+          VALUES ($1, $2, '09:15:00', '17:45:00', 8.50, 'PRESENT')
+        `, [sarahId, dateStr]);
+      }
+    }
+
+    // Seed Leaves if missing
     const johnLeaves = await getAsync(`SELECT COUNT(*) as count FROM leaves WHERE user_id = $1`, [johnId]);
     if (parseInt(johnLeaves?.count || johnLeaves?.['COUNT(*)'] || 0, 10) === 0) {
       await queryAsync(`

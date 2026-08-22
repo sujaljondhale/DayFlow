@@ -12,7 +12,7 @@ async function getDashboardStats(req, res) {
     const presentAttRow = await getAsync(`
       SELECT COUNT(DISTINCT user_id) as count 
       FROM attendance 
-      WHERE date::text = $1 AND check_in IS NOT NULL
+      WHERE date = $1::date AND check_in IS NOT NULL
     `, [today]);
     const presentAttCount = parseInt(presentAttRow?.count || presentAttRow?.['COUNT(*)'] || 0, 10);
 
@@ -29,7 +29,7 @@ async function getDashboardStats(req, res) {
     const pendingLeaveRow = await getAsync(`SELECT COUNT(*) as count FROM leaves WHERE status = 'PENDING'`);
     const pendingLeaves = parseInt(pendingLeaveRow?.count || pendingLeaveRow?.['COUNT(*)'] || 0, 10);
 
-    const myAttendance = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date::text = $2`, [requestingUser.userId, today]);
+    const myAttendance = await getAsync(`SELECT * FROM attendance WHERE user_id = $1 AND date = $2::date`, [requestingUser.userId, today]);
 
     const deptRows = await allAsync(`
       SELECT department, COUNT(*) as count
@@ -54,14 +54,14 @@ async function getDashboardStats(req, res) {
 
     const attendanceTrend = [];
     for (const d of dates) {
-      const pRow = await getAsync(`SELECT COUNT(DISTINCT user_id) as count FROM attendance WHERE date::text = $1 AND check_in IS NOT NULL`, [d]);
+      const pRow = await getAsync(`SELECT COUNT(DISTINCT user_id) as count FROM attendance WHERE date = $1::date AND check_in IS NOT NULL`, [d]);
       let present = parseInt(pRow?.count || pRow?.['COUNT(*)'] || 0, 10);
 
       if (d === today) {
         present = Math.max(present, presentToday);
       }
 
-      const onLRow = await getAsync(`SELECT COUNT(DISTINCT user_id) as count FROM leaves WHERE status = 'APPROVED' AND start_date::text <= $1 AND end_date::text >= $1`, [d]);
+      const onLRow = await getAsync(`SELECT COUNT(DISTINCT user_id) as count FROM leaves WHERE status = 'APPROVED' AND start_date <= $1::date AND end_date >= $1::date`, [d]);
       const onLeaveCount = parseInt(onLRow?.count || onLRow?.['COUNT(*)'] || 0, 10);
       const absent = Math.max(0, totalEmployees - present - onLeaveCount);
       attendanceTrend.push({ date: d, present, absent });
