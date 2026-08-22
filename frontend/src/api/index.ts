@@ -40,6 +40,7 @@ export type DashboardStats = {
 
 export type Attendance = {
   id: number | string;
+  userId?: number | string;
   date: string;
   checkIn?: string;
   checkOut?: string;
@@ -111,6 +112,7 @@ const mapUser = (u: any): User => ({
 
 const mapAttendance = (a: any): Attendance => ({
   id: a.id,
+  userId: a.user_id || a.userId,
   date: a.date,
   checkIn: a.check_in || a.checkIn,
   checkOut: a.check_out || a.checkOut,
@@ -215,7 +217,7 @@ export const useGetDashboardStats = (days: number = 7) => {
             { department: 'Human Resources', count: 1 },
           ],
         } as DashboardStats;
-      } catch (e) {
+      } catch {
         return {
           totalEmployees: 3,
           presentToday: 2,
@@ -319,12 +321,8 @@ export const useGetEmployee = (id: number | string) => {
   return useQuery({
     queryKey: getGetEmployeeQueryKey(id),
     queryFn: async () => {
-      try {
-        const res = await apiClient.get(`/employees/${id}`);
-        return res.data.employee ? (mapUser(res.data.employee) as Employee) : null;
-      } catch {
-        return null;
-      }
+      const res = await apiClient.get(`/employees/${id}`);
+      return mapUser(res.data.employee) as Employee;
     },
     enabled: !!id,
   });
@@ -332,23 +330,46 @@ export const useGetEmployee = (id: number | string) => {
 
 export const useUpdateEmployee = () => {
   return useMutation({
-    mutationFn: async ({ id, data }: { id: number | string; data: any }) => {
+    mutationFn: async ({ id, data }: { id: number | string; data: Partial<Employee> }) => {
       const res = await apiClient.put(`/employees/${id}`, data);
-      return res.data;
+      return mapUser(res.data.employee);
     },
   });
 };
 
-export const useGetLeaves = (params?: { status?: string; userId?: string }) => {
+export const useGetLeaves = () => {
   return useQuery({
-    queryKey: [...getGetLeavesQueryKey(), params],
+    queryKey: getGetLeavesQueryKey(),
     queryFn: async () => {
       try {
-        const res = await apiClient.get('/leaves', { params });
+        const res = await apiClient.get('/leaves');
         return (res.data.leaves || []).map(mapLeave) as Leave[];
       } catch {
         return [] as Leave[];
       }
+    },
+  });
+};
+
+export const useApplyLeave = () => {
+  return useMutation({
+    mutationFn: async ({ data }: { data: { type: string; startDate: string; endDate: string; reason: string } }) => {
+      const res = await apiClient.post('/leaves', {
+        leave_type: data.type,
+        start_date: data.startDate,
+        end_date: data.endDate,
+        reason: data.reason,
+      });
+      return mapLeave(res.data.leave);
+    },
+  });
+};
+
+export const useUpdateLeaveStatus = () => {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number | string; data: { status: string; adminComment?: string } }) => {
+      const res = await apiClient.put(`/leaves/${id}/status`, data);
+      return mapLeave(res.data.leave);
     },
   });
 };
@@ -359,59 +380,21 @@ export const useGetLeaveBalance = () => {
     queryFn: async () => {
       try {
         const res = await apiClient.get('/leaves/balance');
-        const b = res.data.balance || {};
-        return [
-          { type: 'Annual Leave', available: b.paidLeave?.available ?? 24, used: b.paidLeave?.used ?? 0, total: b.paidLeave?.total ?? 24 },
-          { type: 'Sick Leave', available: b.sickLeave?.available ?? 12, used: b.sickLeave?.used ?? 0, total: b.sickLeave?.total ?? 12 },
-        ];
+        return res.data.balances || res.data;
       } catch {
-        return [
-          { type: 'Annual Leave', available: 22, used: 2, total: 24 },
-          { type: 'Sick Leave', available: 11, used: 1, total: 12 },
-        ];
+        return { annual: 20, sick: 10 };
       }
-    },
-  });
-};
-
-export const useApplyLeave = () => {
-  return useMutation({
-    mutationFn: async ({ data }: { data: { type: string; startDate: string; endDate: string; reason: string } }) => {
-      let leaveType = 'PAID';
-      const t = (data.type || '').toLowerCase();
-      if (t.includes('sick')) leaveType = 'SICK';
-      else if (t.includes('unpaid')) leaveType = 'UNPAID';
-
-      const res = await apiClient.post('/leaves/apply', {
-        leaveType,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        reason: data.reason,
-      });
-      return res.data;
-    },
-  });
-};
-
-export const useUpdateLeaveStatus = () => {
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: number | string; data: { status: string; adminComment?: string } }) => {
-      const res = await apiClient.patch(`/leaves/${id}/status`, {
-        status: data.status,
-        adminComment: data.adminComment || '',
-      });
-      return res.data;
     },
   });
 };
 
 export const useSetLeaveAllocation = () => {
   return useMutation({
-    mutationFn: async ({ userId, leaveType, allocatedDays }: { userId: number | string; leaveType: string; allocatedDays: number }) => {
+    mutationFn: async (data: { userId: number; leaveType: string; allocatedDays: number }) => {
       const res = await apiClient.post('/leaves/allocations', {
-        userId,
-        leaveType,
-        allocatedDays,
+        user_id: data.userId,
+        leave_type: data.leaveType,
+        allocated_days: data.allocatedDays,
       });
       return res.data;
     },
@@ -423,61 +406,45 @@ export const useGetMyPayroll = () => {
     queryKey: getGetMyPayrollQueryKey(),
     queryFn: async () => {
       try {
-        const res = await apiClient.get('/payroll/my-slip');
-        const p = res.data.payroll || res.data;
-        const monthlyWage = Number(p.monthly_wage || p.monthlyWage || 50000);
-        const basicSalary = Number(p.basic_salary || p.basicSalary || monthlyWage * 0.5);
-        const hra = Number(p.hra || basicSalary * 0.5);
-        const standardAllowance = Number(p.standard_allowance || p.standardAllowance || basicSalary * 0.1333);
-        const performanceBonus = Number(p.performance_bonus || p.performanceBonus || basicSalary * 0.0833);
-        const lta = Number(p.lta || basicSalary * 0.0833);
-        const fixedAllowance = Number(p.fixed_allowance || p.fixedAllowance || monthlyWage - (basicSalary + hra + standardAllowance + performanceBonus + lta));
-        const pfDeduction = Number(p.pf_deduction || p.pfDeduction || basicSalary * 0.12);
-        const profTax = Number(p.prof_tax || p.profTax || 200);
-        const netSalary = Number(p.net_salary || p.netSalary || monthlyWage - (pfDeduction + profTax));
-
+        const res = await apiClient.get('/payroll/me');
+        const p = res.data.payroll;
         return {
-          id: p.id || 1,
-          month: 'August',
-          year: 2026,
-          monthlyWage,
-          yearlyWage: monthlyWage * 12,
-          basicSalary,
-          netSalary,
-          status: 'PROCESSED',
+          id: p.id,
+          userId: p.user_id,
+          monthlyWage: Number(p.monthly_wage),
+          yearlyWage: Number(p.monthly_wage) * 12,
+          basicSalary: Number(p.basic_salary),
+          netSalary: Number(p.net_salary),
           earnings: {
-            'Basic Salary': basicSalary,
-            'House Rent Allowance (HRA)': hra,
-            'Standard Allowance': standardAllowance,
-            'Performance Bonus': performanceBonus,
-            'Leave Travel Allowance (LTA)': lta,
-            'Fixed Allowance': fixedAllowance,
+            'Basic salary': Number(p.basic_salary),
+            'House Rent Allowance (HRA)': Number(p.hra),
+            'Standard Allowance': Number(p.standard_allowance),
+            'Performance Bonus': Number(p.performance_bonus),
+            'Leave Travel Allowance': Number(p.lta),
+            'Fixed Allowance': Number(p.fixed_allowance),
           },
           deductions: {
-            'Provident Fund (PF)': pfDeduction,
-            'Professional Tax': profTax,
+            'Provident Fund (PF)': Number(p.pf_deduction),
+            'Professional Tax': Number(p.prof_tax),
           },
         } as Payroll;
       } catch {
         return {
           id: 1,
-          month: 'August',
-          year: 2026,
-          monthlyWage: 50000,
-          yearlyWage: 600000,
-          basicSalary: 25000,
-          netSalary: 46800,
-          status: 'PROCESSED',
+          monthlyWage: 75000,
+          yearlyWage: 900000,
+          basicSalary: 37500,
+          netSalary: 70300,
           earnings: {
-            'Basic Salary': 25000,
-            'House Rent Allowance (HRA)': 12500,
-            'Standard Allowance': 3332.5,
-            'Performance Bonus': 2082.5,
-            'Leave Travel Allowance (LTA)': 2082.5,
-            'Fixed Allowance': 4970,
+            'Basic salary': 37500,
+            'House Rent Allowance (HRA)': 18750,
+            'Standard Allowance': 4998.75,
+            'Performance Bonus': 3123.75,
+            'Leave Travel Allowance': 3123.75,
+            'Fixed Allowance': 7503.75,
           },
           deductions: {
-            'Provident Fund (PF)': 3000,
+            'Provident Fund (PF)': 4500,
             'Professional Tax': 200,
           },
         } as Payroll;
@@ -489,7 +456,7 @@ export const useGetMyPayroll = () => {
 export const useUpdatePayroll = () => {
   return useMutation({
     mutationFn: async ({ userId, data }: { userId: number | string; data: { monthlyWage: number } }) => {
-      const res = await apiClient.put(`/payroll/${userId}`, data);
+      const res = await apiClient.put(`/payroll/${userId}`, { monthly_wage: data.monthlyWage });
       return res.data;
     },
   });

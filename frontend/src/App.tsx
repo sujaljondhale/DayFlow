@@ -351,7 +351,7 @@ function Attendance() {
       <div className="attendance-summary">
         <div className="panel attendance-clock">
           <span className="eyebrow">Your attendance today</span>
-          <div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div>
+          <div className="live-clock">{formatTime(todayData?.checkIn)}</div>
           <div className="clock-meta">
             <StatusPill value={todayData?.status || 'Not started'} />
             <span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span>
@@ -445,7 +445,7 @@ function AttendanceTable({ logs, isAdmin = false }: { logs: Attendance[]; isAdmi
             <tr key={log.id} data-testid={`row-attendance-${log.id}`}>
               <td>
                 <strong>{shortDate(log.date)}</strong>
-                <small>{new Date(log.date).toLocaleDateString([], { weekday: 'long' })}</small>
+                <small>{weekdayLabel(log.date)}</small>
               </td>
               <td><strong>{log.employeeName || 'You'}</strong></td>
               <td><StatusPill value={log.status} /></td>
@@ -455,10 +455,10 @@ function AttendanceTable({ logs, isAdmin = false }: { logs: Attendance[]; isAdmi
               {isAdmin && (
                 <td className="align-right">
                   <div className="table-actions">
-                    <Button variant="secondary" onClick={() => mark.mutate({ userId: (log as any).user_id || (log as any).userId || log.id, status: 'PRESENT', date: log.date })} disabled={mark.isPending}>
+                    <Button variant="secondary" onClick={() => mark.mutate({ userId: log.userId || (log as any).user_id || log.id, status: 'PRESENT', date: log.date })} disabled={mark.isPending}>
                       Present
                     </Button>
-                    <Button variant="ghost" onClick={() => mark.mutate({ userId: (log as any).user_id || (log as any).userId || log.id, status: 'ABSENT', date: log.date })} disabled={mark.isPending}>
+                    <Button variant="ghost" onClick={() => mark.mutate({ userId: log.userId || (log as any).user_id || log.id, status: 'ABSENT', date: log.date })} disabled={mark.isPending}>
                       Absent
                     </Button>
                   </div>
