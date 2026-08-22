@@ -354,9 +354,18 @@ export const useGetLeaves = () => {
 export const useApplyLeave = () => {
   return useMutation({
     mutationFn: async ({ data }: { data: { type: string; startDate: string; endDate: string; reason: string } }) => {
-      const res = await apiClient.post('/leaves', {
-        leave_type: data.type,
+      let mappedType = 'PAID';
+      const t = (data.type || '').toLowerCase();
+      if (t.includes('sick')) mappedType = 'SICK';
+      else if (t.includes('unpaid')) mappedType = 'UNPAID';
+      else if (t.includes('annual') || t.includes('personal') || t.includes('paid')) mappedType = 'PAID';
+
+      const res = await apiClient.post('/leaves/apply', {
+        leaveType: mappedType,
+        leave_type: mappedType,
+        startDate: data.startDate,
         start_date: data.startDate,
+        endDate: data.endDate,
         end_date: data.endDate,
         reason: data.reason,
       });
@@ -368,7 +377,7 @@ export const useApplyLeave = () => {
 export const useUpdateLeaveStatus = () => {
   return useMutation({
     mutationFn: async ({ id, data }: { id: number | string; data: { status: string; adminComment?: string } }) => {
-      const res = await apiClient.put(`/leaves/${id}/status`, data);
+      const res = await apiClient.patch(`/leaves/${id}/status`, data);
       return mapLeave(res.data.leave);
     },
   });
