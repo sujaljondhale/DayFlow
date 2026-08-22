@@ -83,10 +83,11 @@ async function updateEmployee(req, res) {
     let updatedRole = existing.role;
     let updatedStatus = existing.status;
 
+    if (name) updatedName = name;
+    if (department) updatedDept = department;
+    if (jobPosition) updatedPos = jobPosition;
+
     if (isAdminOrHR) {
-      if (name) updatedName = name;
-      if (department) updatedDept = department;
-      if (jobPosition) updatedPos = jobPosition;
       if (role && ['ADMIN', 'HR', 'EMPLOYEE'].includes(role.toUpperCase())) updatedRole = role.toUpperCase();
       if (status && ['PRESENT', 'ABSENT', 'ON_LEAVE'].includes(status.toUpperCase())) updatedStatus = status.toUpperCase();
     }
