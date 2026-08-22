@@ -1,0 +1,125 @@
+const { getAsync, allAsync, runAsync } = require('../config/db');
+async function checkIn(req, res) {
+  try {
+    const userId = req.user.userId;
+    const today = new Date().toISOString().split('T')[0];
+    const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+    let record = await getAsync(`SELECT * FROM attendance WHERE user_id = ? AND date = ?`, [userId, today]);
+    if (record && record.check_in && !record.check_out) {
+      return res.status(400).json({ success: false, error: 'Already checked in for today', record });
+    }
+    if (!record) {
+      await runAsync(`
+        INSERT INTO attendance (user_id, date, check_in, status)
+        VALUES (?, ?, ?, 'PRESENT')
+      `, [userId, today, nowTime]);
+    } else {
+      await runAsync(`
+        UPDATE attendance
+        SET check_in = ?, check_out = NULL, status = 'PRESENT'
+        WHERE id = ?
+      `, [nowTime, record.id]);
+    }
+    await runAsync(`UPDATE users SET status = 'PRESENT' WHERE id = ?`, [userId]);
+    record = await getAsync(`SELECT * FROM attendance WHERE user_id = ? AND date = ?`, [userId, today]);
+    return res.json({
+      success: true,
+      message: 'Check-in successful! Status updated to PRESENT.',
+      attendance: record
+    });
+  } catch (err) {
+    console.error('checkIn error:', err);
+    return res.status(500).json({ success: false, error: 'Check-in failed' });
+  }
+}
+async function checkOut(req, res) {
+  try {
+    const userId = req.user.userId;
+    const today = new Date().toISOString().split('T')[0];
+    const nowTime = new Date().toLocaleTimeString('en-US', { hour12: false });
+    const record = await getAsync(`SELECT * FROM attendance WHERE user_id = ? AND date = ?`, [userId, today]);
+    if (!record || !record.check_in) {
+      return res.status(400).json({ success: false, error: 'Cannot check out before checking in' });
+    }
+    const checkInDate = new Date(`${today}T${record.check_in}`);
+    const checkOutDate = new Date(`${today}T${nowTime}`);
+    const diffMs = checkOutDate - checkInDate;
+    const hours = Math.max(0, parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2)));
+    await runAsync(`
+      UPDATE attendance
+      SET check_out = ?, work_hours = ?
+      WHERE id = ?
+    `, [nowTime, hours, record.id]);
+    await runAsync(`UPDATE users SET status = 'ABSENT' WHERE id = ?`, [userId]);
+    const updatedRecord = await getAsync(`SELECT * FROM attendance WHERE id = ?`, [record.id]);
+    return res.json({
+      success: true,
+      message: 'Check-out successful!',
+      attendance: updatedRecord
+    });
+  } catch (err) {
+    console.error('checkOut error:', err);
+    return res.status(500).json({ success: false, error: 'Check-out failed' });
+  }
+}
+async function getTodayAttendance(req, res) {
+  try {
+    const userId = req.user.userId;
+    const today = new Date().toISOString().split('T')[0];
+    const record = await getAsync(`SELECT * FROM attendance WHERE user_id = ? AND date = ?`, [userId, today]);
+    let isCheckedIn = false;
+    if (record && record.check_in && !record.check_out) {
+      isCheckedIn = true;
+    }
+    return res.json({
+      success: true,
+      date: today,
+      isCheckedIn,
+      attendance: record || null
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch today attendance state' });
+  }
+}
+async function getAttendanceLogs(req, res) {
+  try {
+    const requestingUser = req.user;
+    const { startDate, endDate, userId } = req.query;
+    const isAdminOrHR = requestingUser.role === 'ADMIN' || requestingUser.role === 'HR';
+    
+    let sql = `
+      SELECT a.*, u.name as employee_name, u.employee_id, u.avatar_url
+      FROM attendance a
+      JOIN users u ON a.user_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    if (!isAdminOrHR) {
+      sql += ` AND a.user_id = ?`;
+      params.push(requestingUser.userId);
+    } else if (userId) {
+      sql += ` AND a.user_id = ?`;
+      params.push(userId);
+    }
+    if (startDate) {
+      sql += ` AND a.date >= ?`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      sql += ` AND a.date <= ?`;
+      params.push(endDate);
+    }
+    sql += ` ORDER BY a.date DESC, a.id DESC`;
+    const logs = await allAsync(sql, params);
+    return res.json({ success: true, count: logs.length, logs });
+  } catch (err) {
+    console.error('getAttendanceLogs error:', err);
+    return res.status(500).json({ success: false, error: 'Failed to fetch attendance logs' });
+  }
+}
+module.exports = {
+  checkIn,
+  checkOut,
+  getTodayAttendance,
+  getAttendanceLogs
+};
