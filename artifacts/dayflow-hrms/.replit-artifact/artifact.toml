@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Dayflow HRMS"
+description = "A premium HR workspace for employee operations, attendance, leave approvals, payroll visibility, and workforce insights."
+version = "1.0.0"
+id = "artifacts/dayflow-hrms"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24493
+
+[services.development]
+run = "pnpm --filter @workspace/dayflow-hrms run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/dayflow-hrms", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/dayflow-hrms/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24493"
+BASE_PATH = "/"
