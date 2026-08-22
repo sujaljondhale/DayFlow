@@ -299,8 +299,16 @@ function Attendance() {
   const today = useGetAttendanceToday();
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
-  const todayData = today.data;
+  const mark = useMarkAttendance();
+  const meQuery = useGetMe();
+  const me = meQuery.data?.user;
+  const employeesQuery = useGetEmployees();
+  const isAdmin = me?.role?.toLowerCase().includes('admin') || me?.role?.toLowerCase().includes('hr') || me?.role?.toLowerCase().includes('manager');
 
+  const [markingModal, setMarkingModal] = useState(false);
+  const [markForm, setMarkForm] = useState({ userId: '', status: 'PRESENT' as 'PRESENT' | 'ABSENT', date: new Date().toISOString().slice(0, 10) });
+
+  const todayData = today.data;
   const isCompletedToday = !!(todayData?.checkIn && todayData?.checkOut);
   const isCheckedIn = !!(todayData?.checkIn && !todayData?.checkOut);
 
@@ -310,13 +318,158 @@ function Attendance() {
     mutation.mutate();
   };
 
+  const saveMark = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!markForm.userId) return;
+    mark.mutate(
+      { userId: markForm.userId, status: markForm.status, date: markForm.date },
+      { onSuccess: () => setMarkingModal(false) }
+    );
+  };
+
   const btnText = isCompletedToday ? 'Completed for today ✓' : isCheckedIn ? 'Clock out' : 'Clock in';
 
-  return <Shell><PageHeader eyebrow="Attendance desk" title="Time, with context" description="A lightweight record of presence that keeps the whole team in sync." action={<Button onClick={action} disabled={isCompletedToday || checkIn.isPending || checkOut.isPending} testId="button-attendance-toggle">{isCheckedIn ? <><ArrowDownRight size={15} /> Clock out</> : <><Target size={15} /> {btnText}</>}</Button>} /><div className="attendance-summary"><div className="panel attendance-clock"><span className="eyebrow">Your attendance today</span><div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div><div className="clock-meta"><StatusPill value={todayData?.status || 'Not started'} /><span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span></div></div><div className="panel attendance-streak"><span className="eyebrow">This week</span><div className="streak-dots">{Array.from({ length: 5 }).map((_, i) => <span key={i} className={i < (logs.data?.length || 0) ? 'done' : ''}><Check size={13} /></span>)}</div><strong>{logs.data?.length || 0} of 5 days recorded</strong><p>Consistency creates useful visibility.</p></div></div><div className="panel table-panel"><div className="panel-head"><div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div><div className="segmented"><button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button><button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button></div></div><QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>{logs.data?.length ? <AttendanceTable logs={logs.data} /> : <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>}</QueryState></div></Shell>;
+  return (
+    <Shell>
+      <PageHeader
+        eyebrow="Attendance desk"
+        title="Time, with context"
+        description="A lightweight record of presence that keeps the whole team in sync."
+        action={
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {isAdmin && (
+              <Button variant="secondary" onClick={() => setMarkingModal(true)} testId="button-open-mark-modal">
+                <Pencil size={15} /> Mark Attendance
+              </Button>
+            )}
+            <Button onClick={action} disabled={isCompletedToday || checkIn.isPending || checkOut.isPending} testId="button-attendance-toggle">
+              {isCheckedIn ? <><ArrowDownRight size={15} /> Clock out</> : <><Target size={15} /> {btnText}</>}
+            </Button>
+          </div>
+        }
+      />
+      <div className="attendance-summary">
+        <div className="panel attendance-clock">
+          <span className="eyebrow">Your attendance today</span>
+          <div className="live-clock">{todayData?.checkIn ? new Date(todayData.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not started'}</div>
+          <div className="clock-meta">
+            <StatusPill value={todayData?.status || 'Not started'} />
+            <span>{todayData?.workHours ? `${todayData.workHours} working hours logged` : 'Ready when you are'}</span>
+          </div>
+        </div>
+        <div className="panel attendance-streak">
+          <span className="eyebrow">This week</span>
+          <div className="streak-dots">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <span key={i} className={i < (logs.data?.length || 0) ? 'done' : ''}><Check size={13} /></span>
+            ))}
+          </div>
+          <strong>{logs.data?.length || 0} of 5 days recorded</strong>
+          <p>Consistency creates useful visibility.</p>
+        </div>
+      </div>
+      <div className="panel table-panel">
+        <div className="panel-head">
+          <div><span className="eyebrow">Your log</span><h2>Attendance history</h2></div>
+          <div className="segmented">
+            <button data-testid="button-today-range" className={range === 'today' ? 'active' : ''} onClick={() => setRange('today')}>Today</button>
+            <button data-testid="button-week-range" className={range === 'week' ? 'active' : ''} onClick={() => setRange('week')}>This week</button>
+          </div>
+        </div>
+        <QueryState loading={logs.isLoading} error={logs.error} onRetry={() => logs.refetch()}>
+          {logs.data?.length ? (
+            <AttendanceTable logs={logs.data} isAdmin={isAdmin} />
+          ) : (
+            <div className="compact-empty"><Clock3 size={16} />No attendance records for this period.</div>
+          )}
+        </QueryState>
+      </div>
+
+      {markingModal && (
+        <div className="modal-backdrop">
+          <div className="modal glass-strong">
+            <div className="panel-head">
+              <div><span className="eyebrow">Admin & Manager Control</span><h2>Mark Employee Attendance</h2></div>
+              <Button variant="icon" onClick={() => setMarkingModal(false)}><X size={17} /></Button>
+            </div>
+            <form onSubmit={saveMark} className="form-grid">
+              <label>
+                <span>Select Employee</span>
+                <select value={markForm.userId} onChange={(e) => setMarkForm({ ...markForm, userId: e.target.value })} required>
+                  <option value="">-- Choose employee --</option>
+                  {(employeesQuery.data || []).map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.department || 'Employee'})</option>
+                  ))}
+                </select>
+              </label>
+              <Field label="Date" type="date" value={markForm.date} onChange={(v) => setMarkForm({ ...markForm, date: v })} />
+              <label>
+                <span>Status</span>
+                <select value={markForm.status} onChange={(e) => setMarkForm({ ...markForm, status: e.target.value as 'PRESENT' | 'ABSENT' })}>
+                  <option value="PRESENT">PRESENT</option>
+                  <option value="ABSENT">ABSENT</option>
+                </select>
+              </label>
+              <div className="form-actions">
+                <Button variant="ghost" onClick={() => setMarkingModal(false)}>Cancel</Button>
+                <Button type="submit" disabled={mark.isPending || !markForm.userId}>
+                  {mark.isPending ? 'Saving...' : 'Save Attendance'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </Shell>
+  );
 }
 
-function AttendanceTable({ logs }: { logs: Attendance[] }) {
-  return <div className="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Check in</th><th>Check out</th><th>Work hours</th></tr></thead><tbody>{logs.map((log) => <tr key={log.id} data-testid={`row-attendance-${log.id}`}><td><strong>{shortDate(log.date)}</strong><small>{new Date(log.date).toLocaleDateString([], { weekday: 'long' })}</small></td><td><StatusPill value={log.status} /></td><td className="mono">{log.checkIn ? new Date(log.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td><td className="mono">{log.checkOut ? new Date(log.checkOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td><td><strong>{log.workHours ? `${log.workHours}h` : '—'}</strong></td></tr>)}</tbody></table></div>;
+function AttendanceTable({ logs, isAdmin = false }: { logs: Attendance[]; isAdmin?: boolean }) {
+  const mark = useMarkAttendance();
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Employee</th>
+            <th>Status</th>
+            <th>Check in</th>
+            <th>Check out</th>
+            <th>Work hours</th>
+            {isAdmin && <th className="align-right">Quick Mark</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log) => (
+            <tr key={log.id} data-testid={`row-attendance-${log.id}`}>
+              <td>
+                <strong>{shortDate(log.date)}</strong>
+                <small>{new Date(log.date).toLocaleDateString([], { weekday: 'long' })}</small>
+              </td>
+              <td><strong>{log.employeeName || 'You'}</strong></td>
+              <td><StatusPill value={log.status} /></td>
+              <td className="mono">{log.checkIn ? formatTime(log.checkIn) : '—'}</td>
+              <td className="mono">{log.checkOut ? formatTime(log.checkOut) : '—'}</td>
+              <td><strong>{log.workHours ? `${log.workHours}h` : '—'}</strong></td>
+              {isAdmin && (
+                <td className="align-right">
+                  <div className="table-actions">
+                    <Button variant="secondary" onClick={() => mark.mutate({ userId: (log as any).user_id || (log as any).userId || log.id, status: 'PRESENT', date: log.date })} disabled={mark.isPending}>
+                      Present
+                    </Button>
+                    <Button variant="ghost" onClick={() => mark.mutate({ userId: (log as any).user_id || (log as any).userId || log.id, status: 'ABSENT', date: log.date })} disabled={mark.isPending}>
+                      Absent
+                    </Button>
+                  </div>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function Leaves() {
