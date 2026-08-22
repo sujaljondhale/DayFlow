@@ -3,14 +3,23 @@ const { getAsync, allAsync, queryAsync } = require('../config/db');
 async function applyLeave(req, res) {
   try {
     const userId = req.user.userId;
-    const { leaveType, startDate, endDate, reason, attachmentUrl } = req.body;
+    const rawLeaveType = req.body.leaveType || req.body.leave_type;
+    const startDate = req.body.startDate || req.body.start_date;
+    const endDate = req.body.endDate || req.body.end_date;
+    const reason = req.body.reason || '';
+    const attachmentUrl = req.body.attachmentUrl || req.body.attachment_url || '';
 
-    if (!leaveType || !startDate || !endDate) {
+    if (!rawLeaveType || !startDate || !endDate) {
       return res.status(400).json({ success: false, error: 'Leave type, start date, and end date are required' });
     }
 
-    if (!['PAID', 'SICK', 'UNPAID'].includes(leaveType.toUpperCase())) {
-      return res.status(400).json({ success: false, error: 'Invalid leave type. Allowed: PAID, SICK, UNPAID' });
+    let leaveType = rawLeaveType.toString().toUpperCase();
+    if (leaveType.includes('SICK')) {
+      leaveType = 'SICK';
+    } else if (leaveType.includes('UNPAID')) {
+      leaveType = 'UNPAID';
+    } else {
+      leaveType = 'PAID';
     }
 
     const start = new Date(startDate);
@@ -26,7 +35,7 @@ async function applyLeave(req, res) {
       INSERT INTO leaves (user_id, leave_type, start_date, end_date, total_days, reason, attachment_url, status)
       VALUES ($1, $2, $3, $4, $5, $6, $7, 'PENDING')
       RETURNING id
-    `, [userId, leaveType.toUpperCase(), startDate, endDate, totalDays, reason || '', attachmentUrl || '']);
+    `, [userId, leaveType, startDate, endDate, totalDays, reason, attachmentUrl]);
 
     const newLeave = await getAsync(`SELECT * FROM leaves WHERE id = $1`, [insertResult.rows[0].id]);
 
