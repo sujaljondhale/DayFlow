@@ -13,8 +13,8 @@ The system covers authentication, employee profiles, attendance tracking, leave 
 ### Video link: https://drive.google.com/file/d/1w4F6YTRqiGNB-fwoadNjcBwOGnLWUEfH/view?usp=sharing
 
 ### credentials:
-admin: admin@dayflow.com. admin123
-emp: john.doe@dayflow.com. emp123
+* admin: admin@dayflow.com.        password : admin123
+* emp: john.doe@dayflow.com.       password : emp123
 ---
 
 ## ✨ Features
