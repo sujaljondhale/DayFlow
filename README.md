@@ -11,6 +11,10 @@ The system covers authentication, employee profiles, attendance tracking, leave 
 ### Website link: https://day-flow-it9a.vercel.app/dashboard
 
 ### Video link: https://drive.google.com/file/d/1w4F6YTRqiGNB-fwoadNjcBwOGnLWUEfH/view?usp=sharing
+
+### credentials:
+admin: admin@dayflow.com. admin123
+emp: john.doe@dayflow.com. emp123
 ---
 
 ## ✨ Features
