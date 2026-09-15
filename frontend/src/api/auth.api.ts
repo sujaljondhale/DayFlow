@@ -32,25 +32,6 @@ export const authApi = {
       const response = await apiClient.post<AuthResponse>('/auth/login', data);
       return response.data;
     } catch (error: any) {
-      // Fallback for demo purposes if backend is down
-      if (error.code === 'ERR_NETWORK' || !error.response) {
-        console.warn('Backend unreachable, using demo login');
-        return {
-          success: true,
-          message: 'Demo login successful',
-          token: 'demo-jwt-token-12345',
-          user: {
-            id: 1,
-            name: 'Admin User',
-            email: data.email || 'admin@dayflow.com',
-            role: 'ADMIN',
-            employeeId: data.loginId || 'EMP001',
-            companyName: 'Dayflow',
-            department: 'Management',
-            jobPosition: 'Director',
-          }
-        };
-      }
       throw error;
     }
   },
@@ -60,14 +41,6 @@ export const authApi = {
       const response = await apiClient.post<AuthResponse>('/auth/signup', data);
       return response.data;
     } catch (error: any) {
-      if (error.code === 'ERR_NETWORK' || !error.response) {
-        return {
-          success: true,
-          message: 'Demo signup successful',
-          token: 'demo-jwt-token-12345',
-          user: { id: 2, ...data, employeeId: 'EMP002' }
-        };
-      }
       throw error;
     }
   },
@@ -77,15 +50,6 @@ export const authApi = {
       const response = await apiClient.get<{ success: boolean; user: User }>('/auth/me');
       return response.data;
     } catch (error: any) {
-      if (localStorage.getItem('dayflow_token') === 'demo-jwt-token-12345') {
-        return {
-          success: true,
-          user: {
-            id: 1, name: 'Admin User', email: 'admin@dayflow.com', role: 'ADMIN',
-            employeeId: 'EMP001', companyName: 'Dayflow', department: 'Management', jobPosition: 'Director'
-          }
-        };
-      }
       throw error;
     }
   },

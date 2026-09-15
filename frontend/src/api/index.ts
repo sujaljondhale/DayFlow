@@ -199,39 +199,19 @@ export const useGetDashboardStats = (days: number = 7) => {
   return useQuery({
     queryKey: [...getGetDashboardStatsQueryKey(), days],
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/dashboard/stats', { params: { days } });
-        const d = res.data.stats || res.data;
-        return {
-          totalEmployees: d.totalEmployees || 3,
-          presentToday: d.presentToday || 2,
-          onLeave: d.onLeave || 1,
-          onLeaveToday: d.onLeave || 1,
-          pendingLeaves: d.pendingLeaves || 1,
-          absentToday: d.absentToday || 0,
-          newHires: d.newHires || 0,
-          attendanceTrend: d.attendanceTrend?.length ? d.attendanceTrend : generateFallbackTrend(days),
-          departmentDistribution: d.departmentDistribution?.length ? d.departmentDistribution : [
-            { department: 'Engineering', count: 1 },
-            { department: 'Product', count: 1 },
-            { department: 'Human Resources', count: 1 },
-          ],
-        } as DashboardStats;
-      } catch {
-        return {
-          totalEmployees: 3,
-          presentToday: 2,
-          onLeave: 1,
-          pendingLeaves: 1,
-          absentToday: 0,
-          attendanceTrend: generateFallbackTrend(days),
-          departmentDistribution: [
-            { department: 'Engineering', count: 1 },
-            { department: 'Product', count: 1 },
-            { department: 'Human Resources', count: 1 },
-          ],
-        } as DashboardStats;
-      }
+      const res = await apiClient.get('/dashboard/stats', { params: { days } });
+      const d = res.data.stats || res.data;
+      return {
+        totalEmployees: d.totalEmployees || 0,
+        presentToday: d.presentToday || 0,
+        onLeave: d.onLeave || 0,
+        onLeaveToday: d.onLeave || 0,
+        pendingLeaves: d.pendingLeaves || 0,
+        absentToday: d.absentToday || 0,
+        newHires: d.newHires || 0,
+        attendanceTrend: d.attendanceTrend || [],
+        departmentDistribution: d.departmentDistribution || [],
+      } as DashboardStats;
     },
   });
 };
@@ -240,12 +220,8 @@ export const useGetAttendanceToday = () => {
   return useQuery({
     queryKey: getGetAttendanceTodayQueryKey(),
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/attendance/today');
-        return res.data.attendance ? mapAttendance(res.data.attendance) : null;
-      } catch {
-        return null;
-      }
+      const res = await apiClient.get('/attendance/today');
+      return res.data.attendance ? mapAttendance(res.data.attendance) : null;
     },
   });
 };
@@ -254,12 +230,8 @@ export const useGetAttendanceLogs = (params?: { startDate?: string; endDate?: st
   return useQuery({
     queryKey: [...getGetAttendanceLogsQueryKey(), params],
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/attendance/logs', { params });
-        return (res.data.logs || []).map(mapAttendance) as Attendance[];
-      } catch {
-        return [] as Attendance[];
-      }
+      const res = await apiClient.get('/attendance/logs', { params });
+      return (res.data.logs || []).map(mapAttendance) as Attendance[];
     },
   });
 };
@@ -307,12 +279,8 @@ export const useGetEmployees = (params?: { search?: string; status?: string; dep
   return useQuery({
     queryKey: [...getGetEmployeesQueryKey(), params],
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/employees', { params });
-        return (res.data.employees || []).map(mapUser) as Employee[];
-      } catch {
-        return [] as Employee[];
-      }
+      const res = await apiClient.get('/employees', { params });
+      return (res.data.employees || []).map(mapUser) as Employee[];
     },
   });
 };
@@ -341,12 +309,8 @@ export const useGetLeaves = () => {
   return useQuery({
     queryKey: getGetLeavesQueryKey(),
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/leaves');
-        return (res.data.leaves || []).map(mapLeave) as Leave[];
-      } catch {
-        return [] as Leave[];
-      }
+      const res = await apiClient.get('/leaves');
+      return (res.data.leaves || []).map(mapLeave) as Leave[];
     },
   });
 };
@@ -387,12 +351,8 @@ export const useGetLeaveBalance = () => {
   return useQuery({
     queryKey: getGetLeaveBalanceQueryKey(),
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/leaves/balance');
-        return res.data.balances || res.data;
-      } catch {
-        return { annual: 20, sick: 10 };
-      }
+      const res = await apiClient.get('/leaves/balance');
+      return res.data.balances || res.data;
     },
   });
 };
@@ -414,50 +374,28 @@ export const useGetMyPayroll = () => {
   return useQuery({
     queryKey: getGetMyPayrollQueryKey(),
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/payroll/me');
-        const p = res.data.payroll;
-        return {
-          id: p.id,
-          userId: p.user_id,
-          monthlyWage: Number(p.monthly_wage),
-          yearlyWage: Number(p.monthly_wage) * 12,
-          basicSalary: Number(p.basic_salary),
-          netSalary: Number(p.net_salary),
-          earnings: {
-            'Basic salary': Number(p.basic_salary),
-            'House Rent Allowance (HRA)': Number(p.hra),
-            'Standard Allowance': Number(p.standard_allowance),
-            'Performance Bonus': Number(p.performance_bonus),
-            'Leave Travel Allowance': Number(p.lta),
-            'Fixed Allowance': Number(p.fixed_allowance),
-          },
-          deductions: {
-            'Provident Fund (PF)': Number(p.pf_deduction),
-            'Professional Tax': Number(p.prof_tax),
-          },
-        } as Payroll;
-      } catch {
-        return {
-          id: 1,
-          monthlyWage: 75000,
-          yearlyWage: 900000,
-          basicSalary: 37500,
-          netSalary: 70300,
-          earnings: {
-            'Basic salary': 37500,
-            'House Rent Allowance (HRA)': 18750,
-            'Standard Allowance': 4998.75,
-            'Performance Bonus': 3123.75,
-            'Leave Travel Allowance': 3123.75,
-            'Fixed Allowance': 7503.75,
-          },
-          deductions: {
-            'Provident Fund (PF)': 4500,
-            'Professional Tax': 200,
-          },
-        } as Payroll;
-      }
+      const res = await apiClient.get('/payroll/me');
+      const p = res.data.payroll;
+      return {
+        id: p.id,
+        userId: p.user_id,
+        monthlyWage: Number(p.monthly_wage),
+        yearlyWage: Number(p.monthly_wage) * 12,
+        basicSalary: Number(p.basic_salary),
+        netSalary: Number(p.net_salary),
+        earnings: {
+          'Basic salary': Number(p.basic_salary),
+          'House Rent Allowance (HRA)': Number(p.hra),
+          'Standard Allowance': Number(p.standard_allowance),
+          'Performance Bonus': Number(p.performance_bonus),
+          'Leave Travel Allowance': Number(p.lta),
+          'Fixed Allowance': Number(p.fixed_allowance),
+        },
+        deductions: {
+          'Provident Fund (PF)': Number(p.pf_deduction),
+          'Professional Tax': Number(p.prof_tax),
+        },
+      } as Payroll;
     },
   });
 };
