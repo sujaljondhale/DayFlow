@@ -1,5 +1,10 @@
 const { Pool } = require('pg');
-const sqlite3 = require('sqlite3').verbose();
+let sqlite3 = null;
+try {
+  sqlite3 = require('sqlite3').verbose();
+} catch (err) {
+  console.warn('⚠️ sqlite3 module failed to load (likely GLIBC incompatibility). SQLite fallback disabled.');
+}
 const path = require('path');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
@@ -239,7 +244,12 @@ async function initDB() {
     isPg = true;
     console.log('🐘 Connected to PostgreSQL Database');
   } catch (pgErr) {
-    console.log('📦 PostgreSQL unavailable, initializing SQLite fallback database at:', dbPath);
+    console.log('📦 PostgreSQL unavailable.');
+    if (!sqlite3) {
+      console.error('❌ SQLite fallback is also unavailable. Database initialization failed.');
+      throw new Error('No database available');
+    }
+    console.log('📦 Initializing SQLite fallback database at:', dbPath);
     isPg = false;
     sqliteDb = new sqlite3.Database(dbPath);
   }
